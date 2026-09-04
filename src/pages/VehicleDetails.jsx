@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   BatteryCharging,
@@ -15,6 +15,7 @@ import {
   Zap,
 } from "lucide-react";
 import { getAllVehicles, getVehicleById } from "../data/vehicles";
+import { vehicleAPI } from "../services/api";
 
 const today = new Date().toISOString().split("T")[0];
 
@@ -31,9 +32,30 @@ function DetailItem({ icon: Icon, label, value }) {
 function VehicleDetails() {
   const { id, vehicleId } = useParams();
   const navigate = useNavigate();
-  const allVehicles = getAllVehicles();
   const currentId = id || vehicleId;
-  const vehicle = getVehicleById(currentId) || allVehicles[0];
+  const [vehicle, setVehicle] = useState(() => {
+    const all = getAllVehicles();
+    return getVehicleById(currentId) || all[0];
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    if (currentId) {
+      vehicleAPI
+        .getById(currentId)
+        .then((res) => {
+          if (isMounted && res?.data?.data) {
+            setVehicle(res.data.data);
+          }
+        })
+        .catch(() => {
+          // Gracefully retain local fallback vehicle
+        });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [currentId]);
 
   const [favorite, setFavorite] = useState(false);
   const [booking, setBooking] = useState({
@@ -74,7 +96,7 @@ function VehicleDetails() {
   };
 
   const handleProceedToBook = () => {
-    navigate(`/booking/${vehicle.id}`);
+    navigate(`/booking/${vehicle._id || vehicle.id}`);
   };
 
   return (

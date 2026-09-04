@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useBooking } from "../context/BookingContext";
+import { bookingAPI } from "../services/api";
 
 const TABS = [
   { id: "Upcoming", label: "Upcoming" },
@@ -20,16 +21,62 @@ const TABS = [
 
 function Rides() {
   const { bookings, cancelBooking } = useBooking();
+  const [apiRides, setApiRides] = useState(null);
   const [activeTab, setActiveTab] = useState("Upcoming");
   const [cancelModalBooking, setCancelModalBooking] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+    bookingAPI
+      .getMyBookings()
+      .then((res) => {
+        if (isMounted && res?.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
+          const mapped = res.data.data.map((b) => ({
+            id: b.bookingId || b._id,
+            vehicleName: b.vehicle?.name || "Electric Vehicle",
+            vehicleType: b.vehicle?.type || "EV",
+            vehicleBrand: b.vehicle?.brand || "",
+            vehicleImage: b.vehicle?.image || "",
+            pickupLocation: b.pickupLocation || b.vehicle?.location || "VoltRide Hub",
+            pickupDate: new Date(b.pickupDateTime).toLocaleDateString(),
+            pickupTime: new Date(b.pickupDateTime).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            returnDate: new Date(b.returnDateTime).toLocaleDateString(),
+            returnTime: new Date(b.returnDateTime).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            rentalHours: b.duration,
+            pricePerHour: b.vehicle?.pricePerHour || 59,
+            rentalPrice: b.rentalPrice,
+            serviceFee: b.serviceFee,
+            taxes: b.taxes,
+            securityDeposit: b.securityDeposit,
+            totalAmount: b.totalAmount,
+            status: b.bookingStatus,
+          }));
+          setApiRides(mapped);
+        }
+      })
+      .catch(() => {
+        // Fallback to local bookings gracefully
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const displayedBookings = apiRides || bookings;
 
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(""), 4000);
   };
 
-  const filteredBookings = bookings.filter((b) => {
+  const filteredBookings = displayedBookings.filter((b) => {
     if (activeTab === "Upcoming") return b.status === "Upcoming";
     if (activeTab === "Active") return b.status === "Active";
     if (activeTab === "Completed") return b.status === "Completed";
@@ -119,7 +166,7 @@ function Rides() {
         {/* Status Filter Tabs */}
         <div className="mt-8 flex gap-2 overflow-x-auto border-b border-gray-200 pb-2">
           {TABS.map((tab) => {
-            const count = bookings.filter((b) => b.status === tab.id).length;
+            const count = displayedBookings.filter((b) => b.status === tab.id).length;
             const isCurrent = activeTab === tab.id;
             return (
               <button

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   Bike,
@@ -5,17 +6,79 @@ import {
   CheckCircle2,
   Clock3,
   Compass,
+  Loader2,
   MapPin,
   ShieldCheck,
   User,
 } from "lucide-react";
 import { useBooking } from "../context/BookingContext";
+import { bookingAPI } from "../services/api";
 
 function BookingConfirmation() {
   const { bookingId } = useParams();
   const { getBookingById } = useBooking();
+  const localBooking = getBookingById(bookingId);
+  const [apiBooking, setApiBooking] = useState(null);
+  const [loading, setLoading] = useState(!localBooking && Boolean(bookingId));
 
-  const booking = getBookingById(bookingId);
+  useEffect(() => {
+    let isMounted = true;
+    if (!localBooking && bookingId) {
+      bookingAPI
+        .getById(bookingId)
+        .then((res) => {
+          if (isMounted && res?.data?.data) {
+            const b = res.data.data;
+            setApiBooking({
+              id: b.bookingId || b._id,
+              vehicleName: b.vehicle?.name || "Electric Vehicle",
+              vehicleType: b.vehicle?.type || "EV",
+              vehicleBrand: b.vehicle?.brand || "",
+              vehicleImage: b.vehicle?.image || "",
+              pickupLocation: b.pickupLocation || b.vehicle?.location || "VoltRide Hub",
+              pickupDate: new Date(b.pickupDateTime).toLocaleDateString(),
+              pickupTime: new Date(b.pickupDateTime).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              returnDate: new Date(b.returnDateTime).toLocaleDateString(),
+              returnTime: new Date(b.returnDateTime).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              rentalHours: b.duration,
+              pricePerHour: b.vehicle?.pricePerHour || 59,
+              rentalPrice: b.rentalPrice,
+              serviceFee: b.serviceFee,
+              taxes: b.taxes,
+              securityDeposit: b.securityDeposit,
+              totalAmount: b.totalAmount,
+              status: b.bookingStatus,
+            });
+          }
+        })
+        .catch(() => {
+          // Fallback to not found
+        })
+        .finally(() => {
+          if (isMounted) setLoading(false);
+        });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [bookingId, localBooking]);
+
+  const booking = localBooking || apiBooking;
+
+  if (loading) {
+    return (
+      <main className="mx-auto max-w-3xl px-6 pb-24 pt-36 lg:px-8 text-center">
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-lime-600 mb-3" />
+        <p className="text-sm font-semibold text-gray-700">Loading reservation confirmation...</p>
+      </main>
+    );
+  }
 
   if (!booking) {
     return (

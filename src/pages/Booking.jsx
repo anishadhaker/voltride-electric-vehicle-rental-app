@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Clock3,
   FileCheck,
+  Loader2,
   MapPin,
   ShieldAlert,
   ShieldCheck,
@@ -14,8 +15,10 @@ import {
   User,
   Zap,
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 import { useBooking } from "../context/BookingContext";
 import { getAllVehicles, getVehicleById } from "../data/vehicles";
+import { bookingAPI, vehicleAPI } from "../services/api";
 
 const today = new Date().toISOString().split("T")[0];
 
@@ -23,38 +26,46 @@ function Booking() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addBooking } = useBooking();
+  const { user } = useAuth();
 
-  const allVehicles = getAllVehicles();
-  const vehicle = getVehicleById(id) || allVehicles[0];
+  const [vehicle, setVehicle] = useState(() => {
+    const all = getAllVehicles();
+    return getVehicleById(id) || all[0];
+  });
 
-  // Load demo user info
-  const demoUser = (() => {
-    try {
-      const stored = localStorage.getItem("voltride_demo_user");
-      if (stored) return JSON.parse(stored);
-    } catch {
-      // ignore
+  useEffect(() => {
+    let isMounted = true;
+    if (id) {
+      vehicleAPI
+        .getById(id)
+        .then((res) => {
+          if (isMounted && res?.data?.data) {
+            setVehicle(res.data.data);
+          }
+        })
+        .catch(() => {
+          // Gracefully fallback
+        });
     }
-    return {
-      name: "Anisha Dhaker",
-      mobile: "+91 90798 72848",
-      email: "anisha@example.com",
+    return () => {
+      isMounted = false;
     };
-  })();
+  }, [id]);
 
   const [form, setForm] = useState({
     pickupDate: today,
     pickupTime: "10:00",
     returnDate: today,
     returnTime: "14:00",
-    customerName: demoUser.name || "Anisha Dhaker",
-    customerMobile: demoUser.mobile || "+91 90798 72848",
-    customerEmail: demoUser.email || "anisha@example.com",
+    customerName: user?.name || "Anisha Dhaker",
+    customerMobile: user?.mobile || "+91 90798 72848",
+    customerEmail: user?.email || "anisha@example.com",
     helmetCount: "1",
     terms: false,
   });
 
   const [errorMessage, setErrorMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const start =
     form.pickupDate && form.pickupTime
@@ -95,7 +106,7 @@ function Booking() {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const handleSubmitBooking = (e) => {
+  const handleSubmitBooking = async (e) => {
     e.preventDefault();
     if (isTimeOrderInvalid) {
       setErrorMessage("Return date and time must be after pickup date and time.");
@@ -110,8 +121,37 @@ function Booking() {
       return;
     }
 
+    setIsSubmitting(true);
+    setErrorMessage("");
+
+    let apiBookingRef = null;
+    try {
+      const pickupISO = `${form.pickupDate}T${form.pickupTime}:00`;
+      const returnISO = `${form.returnDate}T${form.returnTime}:00`;
+
+      const res = await bookingAPI.create({
+        vehicle: vehicle._id || vehicle.id,
+        pickupLocation: vehicle.location,
+        pickupDateTime: pickupISO,
+        returnDateTime: returnISO,
+        duration: rentalHours,
+        rentalPrice,
+        serviceFee,
+        taxes,
+        securityDeposit,
+        totalAmount,
+      });
+
+      if (res?.data?.data) {
+        apiBookingRef = res.data.data.bookingId || res.data.data._id;
+      }
+    } catch (apiErr) {
+      console.warn("Backend booking API response:", apiErr?.response?.data?.message || apiErr.message);
+    }
+
     const createdBooking = addBooking({
-      vehicleId: vehicle.id,
+      id: apiBookingRef || undefined,
+      vehicleId: vehicle._id || vehicle.id,
       vehicleName: vehicle.name,
       vehicleType: vehicle.type,
       vehicleBrand: vehicle.brand,
@@ -134,14 +174,15 @@ function Booking() {
       status: "Upcoming",
     });
 
-    navigate(`/booking-confirmation/${createdBooking.id}`);
+    setIsSubmitting(false);
+    navigate(`/booking-confirmation/${apiBookingRef || createdBooking.id}`);
   };
 
   return (
     <main className="mx-auto max-w-7xl px-6 pb-24 pt-32 lg:px-8">
       {/* Back Button */}
       <Link
-        to={vehicle ? `/vehicle/${vehicle.id}` : "/explore"}
+        to={vehicle ? `/vehicle/${vehicle._id || vehicle.id}` : "/explore"}
         className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-950"
       >
         <ArrowLeft className="h-4 w-4" /> Back to vehicle details
@@ -367,10 +408,19 @@ function Booking() {
 
             <button
               type="submit"
-              disabled={!isValid}
+              disabled={!isValid || isSubmitting}
               className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-lime-400 px-6 py-4 text-base font-bold text-gray-950 shadow-md transition hover:bg-lime-300 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
             >
-              <Zap className="h-5 w-5 fill-current" /> Confirm & Reserve Ride
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span>Processing Reservation...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="h-5 w-5 fill-current" /> Confirm & Reserve Ride
+                </>
+              )}
             </button>
           </div>
         </form>

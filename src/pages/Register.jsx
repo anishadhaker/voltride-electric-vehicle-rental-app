@@ -14,9 +14,12 @@ import {
   User,
   Zap,
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 function Register() {
   const navigate = useNavigate();
+  const { register } = useAuth();
+
   const [form, setForm] = useState({
     name: "",
     mobile: "",
@@ -28,6 +31,7 @@ function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState({});
+  const [apiError, setApiError] = useState("");
   const [loading, setLoading] = useState(false);
   const [created, setCreated] = useState(false);
 
@@ -57,6 +61,7 @@ function Register() {
   const strength = calculateStrength(form.password);
 
   const updateField = (field, value) => {
+    setApiError("");
     setForm((current) => ({ ...current, [field]: value }));
     if (errors[field]) {
       setErrors((current) => ({ ...current, [field]: "" }));
@@ -102,32 +107,27 @@ function Register() {
     return nextErrors;
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    setApiError("");
     const validationErrors = validate();
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length === 0) {
       setLoading(true);
-      // Simulate account registration
-      setTimeout(() => {
+      try {
+        await register({
+          name: form.name.trim(),
+          email: form.email.trim().toLowerCase(),
+          mobile: form.mobile.trim(),
+          password: form.password,
+        });
         setLoading(false);
         setCreated(true);
-        // Save mock profile in localStorage for continuity
-        try {
-          const userPayload = {
-            name: form.name.trim(),
-            mobile: `+91 ${form.mobile.slice(0, 5)} ${form.mobile.slice(5)}`,
-            email: form.email.trim().toLowerCase(),
-            dob: "01 Jan 2000",
-            gender: "Not specified",
-            address: "Phagwara, Punjab",
-          };
-          localStorage.setItem("voltride_demo_user", JSON.stringify(userPayload));
-        } catch {
-          // ignore localStorage issues in sandbox
-        }
-      }, 700);
+      } catch (err) {
+        setLoading(false);
+        setApiError(err.message || "Registration failed. Please check your details.");
+      }
     }
   };
 
@@ -150,7 +150,7 @@ function Register() {
             Welcome to VoltRide!
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-gray-500">
-            Your VoltRide account for <span className="font-semibold text-gray-800">{form.name}</span> has been created successfully. You can now log in and explore electric rides.
+            Your VoltRide account for <span className="font-semibold text-gray-800">{form.name}</span> has been created successfully. You are logged in and ready to ride!
           </p>
 
           <div className="mt-6 rounded-2xl bg-gray-50 p-4 text-left text-xs text-gray-600 space-y-1.5 border border-gray-100">
@@ -167,18 +167,18 @@ function Register() {
           <div className="mt-8 flex flex-col gap-3">
             <button
               type="button"
-              onClick={() => navigate("/login")}
+              onClick={() => navigate("/explore")}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-5 py-3.5 font-bold text-white shadow-md transition hover:bg-lime-500 hover:text-gray-950"
             >
-              Continue to Login <ArrowRight className="h-5 w-5" />
+              Explore Vehicles <ArrowRight className="h-5 w-5" />
             </button>
 
             <button
               type="button"
-              onClick={() => navigate("/")}
+              onClick={() => navigate("/profile")}
               className="w-full rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
             >
-              Back to Home
+              Go to Profile
             </button>
           </div>
         </section>
@@ -210,6 +210,14 @@ function Register() {
 
         {/* Form Card */}
         <section className="rounded-3xl bg-white p-7 shadow-xl shadow-gray-200/50 ring-1 ring-gray-100 sm:p-10">
+          {/* API Error Alert */}
+          {apiError && (
+            <div className="mb-5 flex items-start gap-2.5 rounded-2xl bg-red-50 p-4 text-xs font-semibold text-red-700 border border-red-100">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>{apiError}</span>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             {/* Full Name */}
             <div>
@@ -308,7 +316,7 @@ function Register() {
                   type={showPassword ? "text" : "password"}
                   value={form.password}
                   onChange={(e) => updateField("password", e.target.value)}
-                  placeholder="Create a strong password"
+                  placeholder="Create a strong password (6+ chars)"
                   className={`w-full rounded-xl border px-11 py-3 text-sm font-normal text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-lime-500 focus:ring-2 focus:ring-lime-100 ${
                     errors.password ? "border-red-300 bg-red-50/20" : "border-gray-200"
                   }`}
@@ -463,4 +471,3 @@ function Register() {
 }
 
 export default Register;
-

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 function VehicleCard({ vehicle }) {
   const vehicleId =
-    vehicle.id || vehicle.name.toLowerCase().replaceAll(" ", "-");
+    vehicle._id || vehicle.id || vehicle.name.toLowerCase().replaceAll(" ", "-");
   const price = vehicle.pricePerHour || vehicle.price || 59;
 
   return (

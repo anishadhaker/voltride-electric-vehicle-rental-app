@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
-import { MapPin, RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, MapPin, RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
 import VehicleCard from "../components/VehicleCard";
-
-import { vehicles } from "../data/vehicles";
+import { vehicles as fallbackVehicles } from "../data/vehicles";
+import { vehicleAPI } from "../services/api";
 
 const initialFilters = { type: "All", maxPrice: 100, minRating: 0, minBattery: 0 };
 
@@ -41,14 +41,38 @@ function FilterContent({ filters, setFilters, onReset, onApply }) {
 }
 
 function Explore() {
+  const [vehicleList, setVehicleList] = useState(fallbackVehicles);
+  const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState(initialFilters);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [nearMe, setNearMe] = useState(false);
 
+  useEffect(() => {
+    let isMounted = true;
+    const loadVehicles = async () => {
+      try {
+        setIsLoading(true);
+        const res = await vehicleAPI.getAll();
+        if (isMounted && res?.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
+          setVehicleList(res.data.data);
+        }
+      } catch {
+        // Fallback to local vehicles gracefully
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    loadVehicles();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const filteredVehicles = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return vehicles.filter((vehicle) => {
+    return vehicleList.filter((vehicle) => {
       const matchesSearch =
         !query ||
         `${vehicle.name} ${vehicle.brand || ""} ${vehicle.location}`
@@ -66,7 +90,7 @@ function Explore() {
         vehicle.battery >= filters.minBattery
       );
     });
-  }, [filters, nearMe, search]);
+  }, [filters, nearMe, search, vehicleList]);
 
   const resetFilters = () => {
     setFilters(initialFilters);
@@ -87,8 +111,40 @@ function Explore() {
       </div>
       <div className="mt-12 flex items-center justify-between border-b border-gray-200 pb-5"><p className="text-sm text-gray-500"><span className="font-semibold text-gray-900">{filteredVehicles.length}</span> vehicles available</p><button type="button" onClick={() => setMobileFiltersOpen(true)} className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 md:hidden"><SlidersHorizontal className="h-4 w-4" /> Filters</button></div>
       <div className="mt-8 grid gap-10 md:grid-cols-[240px_1fr]">
-        <aside className="hidden rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:block"><div className="mb-7 flex items-center justify-between"><h2 className="font-bold text-gray-950">Filter rides</h2><SlidersHorizontal className="h-4 w-4 text-lime-600" /></div><FilterContent filters={filters} setFilters={setFilters} onReset={resetFilters} /></aside>
-        <section aria-live="polite"><div className="grid gap-6 lg:grid-cols-2">{filteredVehicles.map((vehicle) => <VehicleCard key={vehicle.id} vehicle={vehicle} />)}</div>{filteredVehicles.length === 0 && <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-6 py-20 text-center"><h2 className="text-xl font-bold text-gray-950">No vehicles found</h2><p className="mt-2 text-gray-500">Try adjusting your search or filters.</p><button type="button" onClick={resetFilters} className="mt-6 font-semibold text-lime-700 underline underline-offset-4">Reset filters</button></div>}</section>
+        <aside className="hidden rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:block">
+          <div className="mb-7 flex items-center justify-between">
+            <h2 className="font-bold text-gray-950">Filter rides</h2>
+            <SlidersHorizontal className="h-4 w-4 text-lime-600" />
+          </div>
+          <FilterContent filters={filters} setFilters={setFilters} onReset={resetFilters} />
+        </aside>
+        <section aria-live="polite">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+              <Loader2 className="h-8 w-8 animate-spin text-lime-600 mb-3" />
+              <p className="text-sm font-semibold">Loading available fleet...</p>
+            </div>
+          ) : (
+            <div className="grid gap-6 lg:grid-cols-2">
+              {filteredVehicles.map((vehicle) => (
+                <VehicleCard key={vehicle._id || vehicle.id} vehicle={vehicle} />
+              ))}
+            </div>
+          )}
+          {!isLoading && filteredVehicles.length === 0 && (
+            <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-6 py-20 text-center">
+              <h2 className="text-xl font-bold text-gray-950">No vehicles found</h2>
+              <p className="mt-2 text-gray-500">Try adjusting your search or filters.</p>
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="mt-6 font-semibold text-lime-700 underline underline-offset-4"
+              >
+                Reset filters
+              </button>
+            </div>
+          )}
+        </section>
       </div>
       {mobileFiltersOpen && <div className="fixed inset-0 z-[60] md:hidden"><button aria-label="Close filters" onClick={() => setMobileFiltersOpen(false)} className="absolute inset-0 bg-gray-950/40" /><div className="absolute inset-x-0 bottom-0 max-h-[90vh] overflow-y-auto rounded-t-3xl bg-white p-6"><div className="mb-8 flex items-center justify-between"><h2 className="text-xl font-bold">Filter rides</h2><button type="button" aria-label="Close filters" onClick={() => setMobileFiltersOpen(false)} className="rounded-full p-2 text-gray-500 hover:bg-gray-100"><X className="h-5 w-5" /></button></div><FilterContent filters={filters} setFilters={setFilters} onReset={resetFilters} onApply={() => setMobileFiltersOpen(false)} /></div></div>}
     </main>

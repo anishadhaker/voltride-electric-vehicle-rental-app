@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bike,
@@ -28,7 +28,9 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 import { useBooking } from "../context/BookingContext";
+import { authAPI, bookingAPI } from "../services/api";
 
 const DEFAULT_PROFILE = {
   name: "Anisha Dhaker",
@@ -39,7 +41,6 @@ const DEFAULT_PROFILE = {
   address: "Flat 402, Green Avenue, Model Town, Phagwara, Punjab 144401",
   memberSince: "January 2025",
 };
-
 
 const INITIAL_LOCATIONS = [
   { id: "loc-1", title: "Home", address: "Flat 402, Green Avenue, Model Town, Phagwara", isDefault: true, icon: "home" },
@@ -54,26 +55,92 @@ const INITIAL_PAYMENT_METHODS = [
 function Profile() {
   const navigate = useNavigate();
   const { bookings, stats } = useBooking();
+  const { user, logout, updateUser } = useAuth();
 
-  const statsData = [
-    { label: "Total Rides", value: String(stats.totalRides), icon: Bike, hint: "All-time bookings" },
-    { label: "Upcoming Rides", value: String(stats.upcomingRides), icon: Clock3, hint: "Ready to ride" },
-    { label: "Completed Rides", value: String(stats.completedRides), icon: CheckCircle2, hint: "Safe returns" },
-    { label: "Total Amount Spent", value: `₹${stats.totalAmountSpent.toLocaleString()}`, icon: IndianRupee, hint: "Clean energy cost" },
-    { label: "CO₂ Saved", value: `${stats.co2SavedKg} kg`, icon: Leaf, hint: "Green impact" },
-  ];
+  const [apiRides, setApiRides] = useState(null);
+
   const [profile, setProfile] = useState(() => {
     try {
       const cached = localStorage.getItem("voltride_demo_user");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        return { ...DEFAULT_PROFILE, ...parsed };
-      }
+      const parsed = cached ? JSON.parse(cached) : {};
+      return {
+        ...DEFAULT_PROFILE,
+        ...parsed,
+        name: user?.name || parsed.name || DEFAULT_PROFILE.name,
+        email: user?.email || parsed.email || DEFAULT_PROFILE.email,
+        mobile: user?.mobile || parsed.mobile || DEFAULT_PROFILE.mobile,
+      };
     } catch {
-      // ignore
+      return {
+        ...DEFAULT_PROFILE,
+        name: user?.name || DEFAULT_PROFILE.name,
+        email: user?.email || DEFAULT_PROFILE.email,
+        mobile: user?.mobile || DEFAULT_PROFILE.mobile,
+      };
     }
-    return DEFAULT_PROFILE;
   });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    // Fetch fresh profile from backend API
+    authAPI
+      .getProfile()
+      .then((res) => {
+        if (isMounted && res?.data?.data) {
+          const u = res.data.data;
+          setProfile((prev) => ({
+            ...prev,
+            name: u.name || prev.name,
+            email: u.email || prev.email,
+            mobile: u.mobile || prev.mobile,
+          }));
+        }
+      })
+      .catch(() => {});
+
+    // Fetch real rides from backend API
+    bookingAPI
+      .getMyBookings()
+      .then((res) => {
+        if (isMounted && res?.data?.data && Array.isArray(res.data.data)) {
+          const mapped = res.data.data.map((b) => ({
+            id: b.bookingId || b._id,
+            vehicleName: b.vehicle?.name || "Electric Vehicle",
+            vehicleType: b.vehicle?.type || "EV",
+            vehicleImage: b.vehicle?.image || "",
+            pickupLocation: b.pickupLocation || b.vehicle?.location || "VoltRide Hub",
+            pickupDate: new Date(b.pickupDateTime).toLocaleDateString(),
+            rentalHours: b.duration,
+            totalAmount: b.totalAmount,
+            status: b.bookingStatus,
+          }));
+          setApiRides(mapped);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const displayedRides = apiRides || bookings;
+  const totalRides = displayedRides.length;
+  const upcomingRides = displayedRides.filter((r) => r.status === "Upcoming").length;
+  const completedRides = displayedRides.filter((r) => r.status === "Completed").length;
+  const totalAmountSpent = displayedRides
+    .filter((r) => r.status !== "Cancelled")
+    .reduce((sum, r) => sum + (Number(r.totalAmount) || 0), 0);
+  const co2SavedKg = Math.round(totalRides * 4.2 * 10) / 10;
+
+  const statsData = [
+    { label: "Total Rides", value: String(totalRides || stats.totalRides), icon: Bike, hint: "All-time bookings" },
+    { label: "Upcoming Rides", value: String(upcomingRides), icon: Clock3, hint: "Ready to ride" },
+    { label: "Completed Rides", value: String(completedRides), icon: CheckCircle2, hint: "Safe returns" },
+    { label: "Total Amount Spent", value: `₹${(totalAmountSpent || stats.totalAmountSpent).toLocaleString()}`, icon: IndianRupee, hint: "Clean energy cost" },
+    { label: "CO₂ Saved", value: `${co2SavedKg || stats.co2SavedKg} kg`, icon: Leaf, hint: "Green impact" },
+  ];
 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [draftProfile, setDraftProfile] = useState(profile);
@@ -127,7 +194,7 @@ function Profile() {
     setEditModalOpen(true);
   };
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
     const errors = {};
     if (!draftProfile.name.trim()) errors.name = "Name cannot be empty.";
@@ -138,6 +205,18 @@ function Profile() {
     if (Object.keys(errors).length > 0) {
       setEditErrors(errors);
       return;
+    }
+
+    try {
+      const res = await authAPI.updateProfile({
+        name: draftProfile.name,
+        mobile: draftProfile.mobile,
+      });
+      if (res?.data?.data) {
+        updateUser(res.data.data);
+      }
+    } catch (apiErr) {
+      console.warn("Backend updateProfile API unavailable:", apiErr.message);
     }
 
     setProfile(draftProfile);
@@ -207,7 +286,7 @@ function Profile() {
   };
 
   // Change Password
-  const handleChangePassword = (e) => {
+  const handleChangePassword = async (e) => {
     e.preventDefault();
     if (!passwordForm.current) {
       setPasswordError("Please enter your current password.");
@@ -221,15 +300,25 @@ function Profile() {
       setPasswordError("New passwords do not match.");
       return;
     }
-    setPasswordModalOpen(false);
-    setPasswordForm({ current: "", newPassword: "", confirm: "" });
-    setPasswordError("");
-    showToast("Password changed successfully!");
+
+    try {
+      await authAPI.changePassword({
+        currentPassword: passwordForm.current,
+        newPassword: passwordForm.newPassword,
+      });
+      setPasswordModalOpen(false);
+      setPasswordForm({ current: "", newPassword: "", confirm: "" });
+      setPasswordError("");
+      showToast("Password changed successfully!");
+    } catch (err) {
+      setPasswordError(err.response?.data?.message || err.message || "Failed to update password");
+    }
   };
 
   // Logout handler
   const handleConfirmLogout = () => {
     setLogoutModalOpen(false);
+    logout();
     navigate("/login");
   };
 
@@ -426,8 +515,8 @@ function Profile() {
               </div>
 
               <div className="mt-6 space-y-3.5">
-                {bookings.length > 0 ? (
-                  bookings.slice(0, 4).map((ride) => (
+                {displayedRides.length > 0 ? (
+                  displayedRides.slice(0, 4).map((ride) => (
                     <div
                       key={ride.id}
                       className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl bg-gray-50/70 p-4 border border-gray-100 transition hover:bg-gray-50 hover:border-lime-200"

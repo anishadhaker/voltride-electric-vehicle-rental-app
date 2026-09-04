@@ -1,6 +1,8 @@
 import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { Zap } from "lucide-react";
 import Navbar from "./components/Navbar";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { AuthProvider } from "./context/AuthContext";
 import { BookingProvider } from "./context/BookingContext";
 import Admin from "./pages/Admin";
 import Booking from "./pages/Booking";
@@ -31,32 +33,69 @@ function Footer() {
 
 function App() {
   return (
-    <BookingProvider>
-      <BrowserRouter>
-        <div className="min-h-screen bg-[#f8faf9] text-gray-950">
-          <Navbar />
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/explore" element={<Explore />} />
-            <Route path="/vehicle/:id" element={<VehicleDetails />} />
-            <Route path="/vehicles/:vehicleId" element={<VehicleDetails />} />
-            <Route path="/booking/:id" element={<Booking />} />
-            <Route path="/booking" element={<Booking />} />
-            <Route
-              path="/booking-confirmation/:bookingId"
-              element={<BookingConfirmation />}
-            />
-            <Route path="/rides" element={<Rides />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/admin" element={<Admin />} />
-            <Route path="*" element={<Home />} />
-          </Routes>
-          <Footer />
-        </div>
-      </BrowserRouter>
-    </BookingProvider>
+    <AuthProvider>
+      <BookingProvider>
+        <BrowserRouter>
+          <div className="min-h-screen bg-[#f8faf9] text-gray-950">
+            <Navbar />
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/explore" element={<Explore />} />
+              <Route path="/vehicle/:id" element={<VehicleDetails />} />
+              <Route path="/vehicles/:vehicleId" element={<VehicleDetails />} />
+
+              {/* Protected user routes */}
+              <Route
+                path="/booking/:id"
+                element={
+                  <ProtectedRoute>
+                    <Booking />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/booking"
+                element={
+                  <ProtectedRoute>
+                    <Booking />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/booking-confirmation/:bookingId"
+                element={
+                  <ProtectedRoute>
+                    <BookingConfirmation />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/rides"
+                element={
+                  <ProtectedRoute>
+                    <Rides />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <Profile />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route path="/admin" element={<Admin />} />
+              <Route path="*" element={<Home />} />
+            </Routes>
+            <Footer />
+          </div>
+        </BrowserRouter>
+      </BookingProvider>
+    </AuthProvider>
   );
 }
 
