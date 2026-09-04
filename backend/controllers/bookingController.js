@@ -1,9 +1,9 @@
 import Booking from "../models/Booking.js";
 import Vehicle from "../models/Vehicle.js";
 
-// @desc    Get all bookings
+// @desc    Get all bookings (Admin or general listing)
 // @route   GET /api/bookings
-// @access  Public
+// @access  Private/Admin
 export const getBookings = async (req, res, next) => {
   try {
     const { status, bookingId } = req.query;
@@ -11,6 +11,11 @@ export const getBookings = async (req, res, next) => {
 
     if (status) filter.bookingStatus = status;
     if (bookingId) filter.bookingId = bookingId.toUpperCase();
+
+    // If regular customer, restrict to their own bookings
+    if (req.user && req.user.role !== "admin") {
+      filter.user = req.user._id;
+    }
 
     const bookings = await Booking.find(filter)
       .populate("vehicle")
@@ -27,15 +32,40 @@ export const getBookings = async (req, res, next) => {
   }
 };
 
+// @desc    Get bookings of the currently logged-in user
+// @route   GET /api/bookings/my-bookings
+// @access  Private
+export const getMyBookings = async (req, res, next) => {
+  try {
+    const { status } = req.query;
+    const filter = { user: req.user._id };
+
+    if (status) {
+      filter.bookingStatus = status;
+    }
+
+    const bookings = await Booking.find(filter)
+      .populate("vehicle")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: bookings.length,
+      data: bookings,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Get single booking by MongoDB ID or bookingId
 // @route   GET /api/bookings/:id
-// @access  Public
+// @access  Private/Public (ownership checked if authenticated)
 export const getBookingById = async (req, res, next) => {
   try {
     const param = req.params.id;
     let booking;
 
-    // Check if valid MongoDB ObjectId or custom bookingId format
     if (param.match(/^[0-9a-fA-F]{24}$/)) {
       booking = await Booking.findById(param)
         .populate("vehicle")
@@ -53,6 +83,19 @@ export const getBookingById = async (req, res, next) => {
       });
     }
 
+    // Ownership check: if authenticated customer, cannot view other users' bookings
+    if (
+      req.user &&
+      req.user.role !== "admin" &&
+      booking.user &&
+      booking.user._id.toString() !== req.user._id.toString()
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to view this booking",
+      });
+    }
+
     res.status(200).json({
       success: true,
       data: booking,
@@ -62,14 +105,13 @@ export const getBookingById = async (req, res, next) => {
   }
 };
 
-// @desc    Create a new booking
+// @desc    Create a new booking (attached to authenticated user)
 // @route   POST /api/bookings
-// @access  Public
+// @access  Private
 export const createBooking = async (req, res, next) => {
   try {
     const {
       vehicle,
-      user,
       pickupLocation,
       pickupDateTime,
       returnDateTime,
@@ -141,9 +183,12 @@ export const createBooking = async (req, res, next) => {
       bookingId = `VR-2026-${Math.floor(10000 + Math.random() * 90000)}`;
     }
 
+    // 6. Enforce authenticated user: always use req.user._id (never allow client spoofing)
+    const assignedUser = req.user ? req.user._id : req.body.user || null;
+
     const newBooking = await Booking.create({
       bookingId,
-      user: user || null,
+      user: assignedUser,
       vehicle: vehicleDoc._id,
       pickupLocation: pickupLocation || vehicleDoc.location,
       pickupDateTime: start,

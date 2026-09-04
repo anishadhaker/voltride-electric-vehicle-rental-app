@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import express from "express";
 import connectDB from "./config/db.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
+import authRoutes from "./routes/authRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import vehicleRoutes from "./routes/vehicleRoutes.js";
@@ -17,7 +18,25 @@ const app = express();
 connectDB();
 
 // Global Middlewares
-app.use(cors());
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, Postman)
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("CORS policy: Origin not allowed"));
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -30,6 +49,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // API Routes
+app.use("/api/auth", authRoutes);
 app.use("/api/vehicles", vehicleRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/users", userRoutes);

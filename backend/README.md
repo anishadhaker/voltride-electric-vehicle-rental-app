@@ -1,6 +1,6 @@
-# VoltRide Backend API (Phase 1)
+# VoltRide Backend API (Phase 1 & Phase 2)
 
-VoltRide is an electric bike and scooty rental platform. This backend provides RESTful APIs built with **Node.js**, **Express.js**, **MongoDB**, and **Mongoose**.
+VoltRide is an electric bike and scooty rental platform. This backend provides RESTful APIs built with **Node.js**, **Express.js**, **MongoDB**, and **Mongoose**, featuring **JWT Authentication**, **Bcrypt Password Hashing**, and **Role-Based Authorization**.
 
 ---
 
@@ -14,7 +14,7 @@ VoltRide is an electric bike and scooty rental platform. This backend provides R
 
 ## 2. Installation
 
-Navigate into the `backend/` directory and install the dependencies:
+Navigate into the `backend/` directory and install dependencies:
 
 ```bash
 cd backend
@@ -23,10 +23,12 @@ npm install
 
 Installed packages:
 - `express`: Fast web framework for Node.js
-- `mongoose`: Elegant MongoDB object modeling and validation
+- `mongoose`: MongoDB object modeling and schema validation
+- `bcryptjs`: Secure one-way password hashing (salt rounds: 10)
+- `jsonwebtoken`: JSON Web Token generation and validation
 - `cors`: Cross-Origin Resource Sharing middleware
-- `dotenv`: Environment variable configuration
-- `nodemon`: Automatic server restart during development
+- `dotenv`: Environment variable management
+- `nodemon`: Development hot-reload file watcher
 
 ---
 
@@ -51,7 +53,7 @@ MONGODB_URI=mongodb://127.0.0.1:27017/voltride
 JWT_SECRET=your_jwt_secret_key_here
 ```
 
-> **Note**: `.env` is ignored by Git in both root and backend `.gitignore`. Never commit real credentials.
+> **Security Note**: `.env` is ignored by Git in both root and backend `.gitignore`. Never commit real credentials or secrets to version control.
 
 ---
 
@@ -60,14 +62,13 @@ JWT_SECRET=your_jwt_secret_key_here
 ### Local MongoDB:
 Ensure your local MongoDB daemon is running:
 ```bash
-# Windows / Mac / Linux
 mongod
 ```
-Your connection URI is: `mongodb://127.0.0.1:27017/voltride`
+Connection URI: `mongodb://127.0.0.1:27017/voltride`
 
 ### MongoDB Atlas (Cloud):
-1. Create a cluster on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
-2. Get your connection string: `mongodb+srv://<username>:<password>@cluster.mongodb.net/voltride?retryWrites=true&w=majority`
+1. Create a free cluster on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
+2. Obtain your connection string: `mongodb+srv://<username>:<password>@cluster.mongodb.net/voltride?retryWrites=true&w=majority`
 3. Paste the string into `MONGODB_URI` in `backend/.env`.
 
 ---
@@ -84,7 +85,7 @@ npm run dev
 npm start
 ```
 
-When running, you will see:
+When running, the server output displays:
 ```
 🚀 VoltRide Backend server listening on port 5000
 📡 Health Check URL: http://localhost:5000/api/health
@@ -93,49 +94,97 @@ When running, you will see:
 
 ---
 
-## 6. Available API Endpoints
+## 6. How JWT Authentication Works
 
-### Health Check
-| Method | Endpoint | Description | Sample Response |
+1. **Registration / Login**: When a user registers (`POST /api/auth/register`) or logs in (`POST /api/auth/login`), the backend validates credentials and issues a signed JWT token containing `{ id: user._id, role: user.role }`.
+2. **Authorization Header**: For all protected routes, send the token in the HTTP `Authorization` request header:
+   ```http
+   Authorization: Bearer <YOUR_JWT_TOKEN>
+   ```
+3. **Verification**: The `protect` middleware extracts the token, verifies the digital signature using `process.env.JWT_SECRET`, retrieves the user record (excluding password), and attaches it to `req.user`.
+4. **Ownership Protection**: Bookings created while authenticated are automatically bound to `req.user._id`, preventing any client-side user impersonation.
+
+---
+
+## 7. Available API Endpoints
+
+### 🩺 Health Check
+| Method | Endpoint | Access | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/health` | Check API server status | `{"success": true, "message": "VoltRide API is running"}` |
+| `GET` | `/api/health` | Public | Verify that the API server is online |
 
-### Vehicles
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/vehicles` | List all vehicles (supports `?type=`, `?status=`, `?location=`) |
-| `GET` | `/api/vehicles/:id` | Get vehicle details by MongoDB ID |
-| `POST` | `/api/vehicles` | Register a new electric vehicle |
+---
 
-#### Sample Vehicle JSON for `POST /api/vehicles`:
+### 🔐 Authentication (`/api/auth`)
+| Method | Endpoint | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/auth/register` | Public | Register user (`name`, `email`, `mobile`, `password`) |
+| `POST` | `/api/auth/login` | Public | Login with `identifier` (email or mobile) & `password` |
+
+#### Sample Registration Request (`POST /api/auth/register`):
 ```json
 {
-  "name": "Ather 450X",
-  "brand": "Ather Energy",
-  "model": "Gen 3 Pro",
-  "type": "Electric Scooter",
-  "registrationNumber": "PB-08-EV-1001",
-  "image": "https://images.unsplash.com/photo-1558981285-6f0c94958bb6?auto=format&fit=crop&w=1200&q=85",
-  "location": "Phagwara City Hub",
-  "battery": 94,
-  "range": 111,
-  "topSpeed": 90,
-  "chargingTime": "5.4 hrs",
-  "pricePerHour": 59,
-  "pricePerDay": 999,
-  "rating": 4.8,
-  "status": "Available"
+  "name": "Anisha Dhaker",
+  "email": "anisha@example.com",
+  "mobile": "9079872848",
+  "password": "Password@123"
 }
 ```
 
-### Bookings
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/bookings` | List all bookings with populated vehicle & user |
-| `GET` | `/api/bookings/:id` | Get single booking by MongoDB ID or `VR-2026-XXXXX` |
-| `POST` | `/api/bookings` | Create a new rental booking |
+#### Sample Registration / Login Response:
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "user": {
+    "id": "66d8e123456789abcdef0123",
+    "name": "Anisha Dhaker",
+    "email": "anisha@example.com",
+    "mobile": "9079872848",
+    "role": "customer"
+  },
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
 
-#### Sample Booking JSON for `POST /api/bookings`:
+---
+
+### 👤 User Profile (`/api/users`)
+| Method | Endpoint | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/users/profile` | Protected | Get current authenticated user profile |
+| `PUT` | `/api/users/profile` | Protected | Update profile (`name`, `email`, `mobile`, `profileImage`) |
+| `PUT` | `/api/users/change-password` | Protected | Change password (`currentPassword`, `newPassword`) |
+| `GET` | `/api/users` | Admin Only | List all registered users |
+
+#### Sample Change Password Request (`PUT /api/users/change-password`):
+```json
+{
+  "currentPassword": "Password@123",
+  "newPassword": "NewSecurePassword@456"
+}
+```
+
+---
+
+### 🛵 Vehicles (`/api/vehicles`)
+| Method | Endpoint | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/vehicles` | Public | List all vehicles (filters: `?type=`, `?status=`, `?location=`) |
+| `GET` | `/api/vehicles/:id` | Public | Get single vehicle details by MongoDB ID |
+| `POST` | `/api/vehicles` | Public/Dev | Register a new electric vehicle |
+
+---
+
+### 📅 Bookings (`/api/bookings`)
+| Method | Endpoint | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/bookings` | Protected | Create booking (user automatically assigned from `req.user`) |
+| `GET` | `/api/bookings/my-bookings` | Protected | Retrieve only the logged-in user's personal bookings |
+| `GET` | `/api/bookings` | Protected | List bookings (customers see own; admins see all) |
+| `GET` | `/api/bookings/:id` | Protected | View single booking (restricted to owner or admin) |
+
+#### Sample Booking Request (`POST /api/bookings`):
 ```json
 {
   "vehicle": "<VEHICLE_MONGODB_ID>",
@@ -151,29 +200,47 @@ When running, you will see:
 }
 ```
 
-### Users (Placeholder)
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/users` | List users (passwords excluded) |
-| `GET` | `/api/users/:id` | Get user by ID |
-| `POST` | `/api/users` | Create user record |
-
 ---
 
-## 7. Response Format
+## 8. Testing via PowerShell / cURL
 
-### Success:
-```json
-{
-  "success": true,
-  "data": {}
-}
+### 1. Test Health:
+```powershell
+Invoke-RestMethod -Uri http://localhost:5000/api/health -Method GET
 ```
 
-### Error:
-```json
-{
-  "success": false,
-  "message": "Error description"
-}
+### 2. Register a User:
+```powershell
+$body = @{
+    name = "Anisha Dhaker"
+    email = "anisha@example.com"
+    mobile = "9079872848"
+    password = "SecurePassword@123"
+} | ConvertTo-Json
+
+$response = Invoke-RestMethod -Uri http://localhost:5000/api/auth/register -Method POST -Body $body -ContentType "application/json"
+$token = $response.token
+```
+
+### 3. Login with Mobile Number:
+```powershell
+$loginBody = @{
+    identifier = "9079872848"
+    password = "SecurePassword@123"
+} | ConvertTo-Json
+
+$loginResponse = Invoke-RestMethod -Uri http://localhost:5000/api/auth/login -Method POST -Body $loginBody -ContentType "application/json"
+$token = $loginResponse.token
+```
+
+### 4. Fetch Profile with Bearer Token:
+```powershell
+$headers = @{ Authorization = "Bearer $token" }
+Invoke-RestMethod -Uri http://localhost:5000/api/users/profile -Method GET -Headers $headers
+```
+
+### 5. Fetch My Bookings:
+```powershell
+$headers = @{ Authorization = "Bearer $token" }
+Invoke-RestMethod -Uri http://localhost:5000/api/bookings/my-bookings -Method GET -Headers $headers
 ```
