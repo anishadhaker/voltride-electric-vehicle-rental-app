@@ -1,6 +1,8 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import connectDB from "./config/db.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -9,8 +11,12 @@ import bookingRoutes from "./routes/bookingRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import vehicleRoutes from "./routes/vehicleRoutes.js";
 
-// Load environment variables from .env
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load the backend environment file explicitly so the Atlas URI resolves from backend/.env
+// even when the process is started from the project root or another working directory.
+dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 // Initialize Express app
 const app = express();
@@ -61,7 +67,7 @@ app.use(notFound);
 app.use(errorHandler);
 
 // Start HTTP Server
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 
 const startServer = async () => {
   try {

@@ -3,6 +3,19 @@ import axios from "axios";
 const configuredBaseUrl = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 const API_BASE_URL = configuredBaseUrl.replace(/\/+$/, "").replace(/\/api\/api$/, "/api");
 
+const TOKEN_KEY = "token";
+const LEGACY_TOKEN_KEY = "voltride_token";
+const USER_KEY = "user";
+const LEGACY_USER_KEY = "voltride_user";
+
+const getStoredToken = () => localStorage.getItem(TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY);
+const clearStoredAuth = () => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_USER_KEY);
+};
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
@@ -14,7 +27,7 @@ const api = axios.create({
 // Request Interceptor: Automatically attach Authorization Bearer token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("voltride_token");
+    const token = getStoredToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -31,8 +44,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       const isAuthEndpoint = error.config?.url?.includes("/auth/");
       if (!isAuthEndpoint) {
-        localStorage.removeItem("voltride_token");
-        localStorage.removeItem("voltride_user");
+        clearStoredAuth();
         window.dispatchEvent(new Event("voltride_auth_expired"));
       }
     }

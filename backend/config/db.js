@@ -1,13 +1,22 @@
 import mongoose from "mongoose";
 
 const connectDB = async () => {
-  const mongoUri = process.env.MONGODB_URI;
+  const rawMongoUri = (process.env.MONGODB_URI ?? "").trim();
+  const mongoUri = rawMongoUri.replace(/^['"]+|['"]+$/g, "");
 
   // Never buffer queries when disconnected to avoid hanging requests
   mongoose.set("bufferCommands", false);
 
   if (!mongoUri) {
     throw new Error("MONGODB_URI is not defined in backend/.env");
+  }
+
+  if (mongoUri.includes(" ") || mongoUri.includes("\n") || mongoUri.includes("\r")) {
+    throw new Error("MONGODB_URI has invalid whitespace or malformed content");
+  }
+
+  if (!mongoUri.startsWith("mongodb://") && !mongoUri.startsWith("mongodb+srv://")) {
+    throw new Error("MONGODB_URI is invalid: expected mongodb:// or mongodb+srv://");
   }
 
   try {
