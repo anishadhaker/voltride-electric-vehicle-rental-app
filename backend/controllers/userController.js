@@ -1,11 +1,14 @@
 import User from "../models/User.js";
+import { isMongoConnected, memoryStore } from "../config/memoryStore.js";
 
 // @desc    Get current user profile
 // @route   GET /api/users/profile
 // @access  Private
 export const getUserProfile = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user._id).select("-password");
+    const user = isMongoConnected()
+      ? await User.findById(req.user._id).select("-password")
+      : await memoryStore.users.findById(req.user._id);
 
     if (!user) {
       return res.status(404).json({
@@ -36,7 +39,9 @@ export const getUserProfile = async (req, res, next) => {
 // @access  Private
 export const updateUserProfile = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user._id);
+    const user = isMongoConnected()
+      ? await User.findById(req.user._id)
+      : await memoryStore.users.findById(req.user._id);
 
     if (!user) {
       return res.status(404).json({
@@ -57,10 +62,14 @@ export const updateUserProfile = async (req, res, next) => {
         });
       }
 
-      const existingEmail = await User.findOne({
-        email: email.toLowerCase().trim(),
-        _id: { $ne: user._id },
-      });
+      const existingEmail = isMongoConnected()
+        ? await User.findOne({
+            email: email.toLowerCase().trim(),
+            _id: { $ne: user._id },
+          })
+        : (await memoryStore.users.find()).find(
+            (candidate) => candidate.email === email.toLowerCase().trim() && candidate._id !== user._id
+          );
 
       if (existingEmail) {
         return res.status(400).json({
@@ -75,10 +84,11 @@ export const updateUserProfile = async (req, res, next) => {
     // Check mobile uniqueness if mobile is changed
     if (mobile && mobile.trim() !== user.mobile) {
       const cleanMobile = mobile.replace(/[^0-9+]/g, "").trim();
-      const existingMobile = await User.findOne({
-        mobile: cleanMobile,
-        _id: { $ne: user._id },
-      });
+      const existingMobile = isMongoConnected()
+        ? await User.findOne({ mobile: cleanMobile, _id: { $ne: user._id } })
+        : (await memoryStore.users.find()).find(
+            (candidate) => candidate.mobile === cleanMobile && candidate._id !== user._id
+          );
 
       if (existingMobile) {
         return res.status(400).json({
@@ -93,7 +103,13 @@ export const updateUserProfile = async (req, res, next) => {
     if (name) user.name = name.trim();
     if (profileImage !== undefined) user.profileImage = profileImage;
 
-    const updatedUser = await user.save();
+    const updatedUser = isMongoConnected()
+      ? await user.save()
+      : await memoryStore.users.findByIdAndUpdate(req.user._id, {
+          name: user.name,
+          mobile: user.mobile,
+          email: user.email,
+        });
 
     res.status(200).json({
       success: true,
@@ -134,7 +150,9 @@ export const changeUserPassword = async (req, res, next) => {
       });
     }
 
-    const user = await User.findById(req.user._id);
+    const user = isMongoConnected()
+      ? await User.findById(req.user._id)
+      : await memoryStore.users.findById(req.user._id);
 
     if (!user) {
       return res.status(404).json({
@@ -159,9 +177,14 @@ export const changeUserPassword = async (req, res, next) => {
       });
     }
 
-    // Pre-save hook will automatically hash the new password
-    user.password = newPassword;
-    await user.save();
+    if (isMongoConnected()) {
+      user.password = newPassword;
+      await user.save();
+    } else {
+      await memoryStore.users.findByIdAndUpdate(req.user._id, {
+        password: newPassword,
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -177,7 +200,9 @@ export const changeUserPassword = async (req, res, next) => {
 // @access  Private/Admin
 export const getUsers = async (req, res, next) => {
   try {
-    const users = await User.find().select("-password").sort({ createdAt: -1 });
+    const users = isMongoConnected()
+      ? await User.find().select("-password").sort({ createdAt: -1 })
+      : await memoryStore.users.find();
 
     res.status(200).json({
       success: true,

@@ -51,9 +51,19 @@ MONGODB_URI=mongodb://127.0.0.1:27017/voltride
 
 # JWT Authentication Secret Key
 JWT_SECRET=your_jwt_secret_key_here
+
+# Password reset email delivery (SMTP)
+EMAIL_HOST=smtp.example.com
+EMAIL_PORT=587
+EMAIL_SECURE=false
+EMAIL_USER=your-smtp-username
+EMAIL_PASSWORD=your-smtp-password
+EMAIL_FROM=VoltRide <no-reply@example.com>
 ```
 
 > **Security Note**: `.env` is ignored by Git in both root and backend `.gitignore`. Never commit real credentials or secrets to version control.
+
+For local transport-only testing, set `EMAIL_TRANSPORT=json`. This validates the Nodemailer path without delivering email; use real SMTP variables for the actual OTP flow. Never put SMTP credentials in frontend code.
 
 ---
 
@@ -120,6 +130,9 @@ When running, the server output displays:
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/auth/register` | Public | Register user (`name`, `email`, `mobile`, `password`) |
 | `POST` | `/api/auth/login` | Public | Login with `identifier` (email or mobile) & `password` |
+| `POST` | `/api/auth/forgot-password` | Public | Request a 6-digit email OTP (`email`) |
+| `POST` | `/api/auth/verify-reset-otp` | Public | Verify OTP and receive a short-lived reset authorization |
+| `POST` | `/api/auth/reset-password` | Public | Set a new password using the reset authorization |
 
 #### Sample Registration Request (`POST /api/auth/register`):
 ```json

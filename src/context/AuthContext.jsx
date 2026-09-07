@@ -24,15 +24,19 @@ export function AuthProvider({ children }) {
       const storedToken = localStorage.getItem(TOKEN_KEY);
 
       if (!storedToken) {
+        setToken(null);
+        setUser(null);
         setIsLoading(false);
         return;
       }
 
       try {
-        const response = await authAPI.getProfile();
+        const response = await authAPI.getCurrentUser();
         if (response.success && response.data) {
           setUser(response.data);
           localStorage.setItem(USER_KEY, JSON.stringify(response.data));
+        } else {
+          throw new Error("The saved session is no longer valid.");
         }
       } catch (error) {
         console.warn("Session expired or token invalid:", error.message);
@@ -49,6 +53,8 @@ export function AuthProvider({ children }) {
 
     // Listen for custom expiration event from api.js interceptor
     const handleAuthExpired = () => {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
       setToken(null);
       setUser(null);
     };
@@ -87,7 +93,6 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
-    localStorage.removeItem("voltride_bookings"); // clear demo bookings on logout
     setToken(null);
     setUser(null);
   };

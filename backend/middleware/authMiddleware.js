@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import { isMongoConnected, memoryStore } from "../config/memoryStore.js";
 
 /**
  * Protect routes: Authenticate JWT from Authorization header
@@ -20,8 +21,10 @@ export const protect = async (req, res, next) => {
         process.env.JWT_SECRET || "voltride_development_jwt_secret_key_2026";
       const decoded = jwt.verify(token, secret);
 
-      // Fetch user from DB, excluding password
-      req.user = await User.findById(decoded.id).select("-password");
+      // Fetch user from DB or memoryStore, excluding password
+      req.user = isMongoConnected()
+        ? await User.findById(decoded.id).select("-password")
+        : await memoryStore.users.findById(decoded.id);
 
       if (!req.user) {
         return res.status(401).json({
@@ -64,7 +67,7 @@ export const authorizeRoles = (...roles) => {
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
-        message: `Role '${req.user.role}' is not authorized to access this resource`,
+        message: roles.includes("admin") ? "Admin access required" : `Role '${req.user.role}' is not authorized to access this resource`,
       });
     }
 

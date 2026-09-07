@@ -1,7 +1,7 @@
 import axios from "axios";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const configuredBaseUrl = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+const API_BASE_URL = configuredBaseUrl.replace(/\/+$/, "").replace(/\/api\/api$/, "/api");
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -37,10 +37,16 @@ api.interceptors.response.use(
       }
     }
 
-    const message =
-      error.response?.data?.message ||
-      error.message ||
-      "Unable to connect to the server. Please check your connection.";
+    let message = error.response?.data?.message;
+    if (!message) {
+      if (error.code === "ECONNABORTED") {
+        message = "Server connection timed out. Please try again.";
+      } else if (error.message === "Network Error") {
+        message = "Unable to connect to VoltRide backend (http://localhost:5001). Please ensure the backend server is running.";
+      } else {
+        message = error.message || "Unable to connect to the server. Please check your connection.";
+      }
+    }
 
     const customError = new Error(message);
     customError.status = error.response?.status;
@@ -60,6 +66,30 @@ export const authAPI = {
 
   login: async (credentials) => {
     const response = await api.post("/auth/login", credentials);
+    return response.data;
+  },
+
+  forgotPassword: async (email) => {
+    const response = await api.post("/auth/forgot-password", { email });
+    return response.data;
+  },
+
+  verifyResetOtp: async (email, otp) => {
+    const response = await api.post("/auth/verify-reset-otp", { email, otp });
+    return response.data;
+  },
+
+  resetPassword: async (resetToken, newPassword, confirmPassword) => {
+    const response = await api.post("/auth/reset-password", {
+      resetToken,
+      newPassword,
+      confirmPassword,
+    });
+    return response.data;
+  },
+
+  getCurrentUser: async () => {
+    const response = await api.get("/auth/me");
     return response.data;
   },
 
@@ -92,6 +122,11 @@ export const vehicleAPI = {
     const response = await api.get(`/vehicles/${id}`);
     return response.data;
   },
+
+  checkAvailability: async (id, payload) => {
+    const response = await api.post(`/vehicles/${id}/check-availability`, payload);
+    return response.data;
+  },
 };
 
 /* =======================================================
@@ -108,10 +143,36 @@ export const bookingAPI = {
     return response.data;
   },
 
+  getMyStats: async () => {
+    const response = await api.get("/bookings/my-stats");
+    return response.data;
+  },
+
   getById: async (id) => {
     const response = await api.get(`/bookings/${id}`);
     return response.data;
   },
+
+  cancel: async (id) => {
+    const response = await api.put(`/bookings/${id}/cancel`);
+    return response.data;
+  },
+
+  updatePaymentStatus: async (id, paymentStatus = "Paid") => {
+    const response = await api.put(`/bookings/${id}/payment-status`, { paymentStatus });
+    return response.data;
+  },
+};
+
+export const adminAPI = {
+  getDashboard: async () => (await api.get("/admin/dashboard")).data,
+  getVehicles: async () => (await api.get("/admin/vehicles")).data,
+  createVehicle: async (vehicle) => (await api.post("/admin/vehicles", vehicle)).data,
+  updateVehicle: async (id, vehicle) => (await api.put(`/admin/vehicles/${id}`, vehicle)).data,
+  deleteVehicle: async (id) => (await api.delete(`/admin/vehicles/${id}`)).data,
+  getBookings: async () => (await api.get("/admin/bookings")).data,
+  getUsers: async () => (await api.get("/admin/users")).data,
+  getAnalytics: async () => (await api.get("/admin/analytics")).data,
 };
 
 export default api;

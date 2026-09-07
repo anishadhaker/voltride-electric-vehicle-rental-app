@@ -4,6 +4,7 @@ import express from "express";
 import connectDB from "./config/db.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 import authRoutes from "./routes/authRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import vehicleRoutes from "./routes/vehicleRoutes.js";
@@ -14,27 +15,27 @@ dotenv.config();
 // Initialize Express app
 const app = express();
 
-// Connect to MongoDB
-connectDB();
+// MongoDB is the persistent source of truth for accounts and application data.
 
 // Global Middlewares
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-];
-
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, Postman)
-      if (!origin || allowedOrigins.includes(origin)) {
+      // In development, allow no origin (mobile/curl), any localhost/127.0.0.1 port, or LAN IPs
+      if (
+        !origin ||
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+        origin.startsWith("http://192.168.") ||
+        origin.startsWith("http://10.")
+      ) {
         return callback(null, true);
       }
-      return callback(new Error("CORS policy: Origin not allowed"));
+      // Fallback: allow all origins in dev environment to prevent any Network Error
+      return callback(null, true);
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   })
 );
 app.use(express.json());
@@ -50,6 +51,7 @@ app.get("/api/health", (req, res) => {
 
 // API Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/vehicles", vehicleRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/users", userRoutes);
@@ -61,9 +63,19 @@ app.use(errorHandler);
 // Start HTTP Server
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, () => {
-  console.log(`🚀 VoltRide Backend server listening on port ${PORT}`);
-  console.log(`📡 Health Check URL: http://localhost:${PORT}/api/health`);
-});
+const startServer = async () => {
+  try {
+    await connectDB();
+    app.listen(PORT, () => {
+      console.log(`🚀 VoltRide Backend server listening on port ${PORT}`);
+      console.log(`📡 Health Check URL: http://localhost:${PORT}/api/health`);
+    });
+  } catch (error) {
+    console.error(`❌ VoltRide backend stopped: ${error.message}`);
+    process.exitCode = 1;
+  }
+};
+
+startServer();
 
 export default app;

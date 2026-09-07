@@ -64,13 +64,85 @@ function VehicleDetails() {
     returnDate: today,
     returnTime: "14:00",
   });
+  const [availabilityStatus, setAvailabilityStatus] = useState({
+    loading: false,
+    available: null,
+    message: "",
+  });
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+
+  const start = booking.pickupDate && booking.pickupTime ? new Date(`${booking.pickupDate}T${booking.pickupTime}`) : null;
+  const end = booking.returnDate && booking.returnTime ? new Date(`${booking.returnDate}T${booking.returnTime}`) : null;
+  const invalidTimeOrder = Boolean(start && end && end <= start);
+
+  const handleCheckAvailability = async () => {
+    const currentVehicleId = vehicle?._id || vehicle?.id;
+    if (!currentVehicleId) {
+      setAvailabilityStatus({
+        loading: false,
+        available: false,
+        message: "Vehicle not found.",
+      });
+      return;
+    }
+
+    if (!start || !end) {
+      setAvailabilityStatus({
+        loading: false,
+        available: false,
+        message: "Please select a valid pickup and return time.",
+      });
+      return;
+    }
+
+    if (invalidTimeOrder) {
+      setAvailabilityStatus({
+        loading: false,
+        available: false,
+        message: "Return date and time must be later than the pickup date and time.",
+      });
+      return;
+    }
+
+    setCheckingAvailability(true);
+    setAvailabilityStatus({
+      loading: true,
+      available: null,
+      message: "Checking availability...",
+    });
+
+    try {
+      const response = await vehicleAPI.checkAvailability(currentVehicleId, {
+        pickupDateTime: `${booking.pickupDate}T${booking.pickupTime}:00`,
+        returnDateTime: `${booking.returnDate}T${booking.returnTime}:00`,
+      });
+
+      const available = Boolean(response?.available);
+      setAvailabilityStatus({
+        loading: false,
+        available,
+        message:
+          response?.message ||
+          (available
+            ? "Vehicle is available for the selected time."
+            : "Vehicle is already booked for the selected time period"),
+      });
+    } catch (err) {
+      setAvailabilityStatus({
+        loading: false,
+        available: false,
+        message: err?.message || err?.data?.message || "Unable to check availability. Please try again.",
+      });
+    } finally {
+      setCheckingAvailability(false);
+    }
+  };
 
   const rentalHours = useMemo(() => {
-    const start = new Date(`${booking.pickupDate}T${booking.pickupTime}`);
-    const end = new Date(`${booking.returnDate}T${booking.returnTime}`);
+    if (!start || !end || invalidTimeOrder) return 1;
     const hours = Math.ceil((end - start) / (1000 * 60 * 60));
     return Math.max(1, Number.isFinite(hours) && hours > 0 ? hours : 1);
-  }, [booking]);
+  }, [start, end, invalidTimeOrder]);
 
   const pricePerHour = vehicle.pricePerHour || vehicle.price || 59;
   const pricePerDay = vehicle.pricePerDay || vehicle.dailyPrice || 999;
@@ -96,6 +168,21 @@ function VehicleDetails() {
   };
 
   const handleProceedToBook = () => {
+    if (checkingAvailability || availabilityStatus.loading) {
+      setAvailabilityStatus((prev) => ({
+        ...prev,
+        message: "Checking availability. Please wait a moment.",
+      }));
+      return;
+    }
+    if (availabilityStatus.available === false) {
+      setAvailabilityStatus((prev) => ({
+        ...prev,
+        message: prev.message || "This vehicle is not available for the selected time.",
+      }));
+      return;
+    }
+
     navigate(`/booking/${vehicle._id || vehicle.id}`);
   };
 
@@ -363,13 +450,52 @@ function VehicleDetails() {
                 </div>
               </div>
 
-              {/* Action Button: Book this Vehicle */}
+              <div
+                className={`mt-4 rounded-2xl border p-3 text-xs font-semibold ${
+                  availabilityStatus.loading
+                    ? "border-blue-100 bg-blue-50 text-blue-700"
+                    : availabilityStatus.available === false
+                      ? "border-red-100 bg-red-50 text-red-700"
+                      : availabilityStatus.available === true
+                        ? "border-lime-100 bg-lime-50 text-lime-800"
+                        : "border-gray-100 bg-gray-50 text-gray-700"
+                }`}
+              >
+                {availabilityStatus.loading
+                  ? "Checking availability..."
+                  : availabilityStatus.message || "Select a time to check availability."}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCheckAvailability}
+                disabled={checkingAvailability || !start || !end || invalidTimeOrder}
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-lime-200 bg-lime-50 px-5 py-4 font-bold text-lime-800 shadow-sm transition hover:bg-lime-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-500"
+              >
+                {checkingAvailability ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-lime-700 border-t-transparent" />
+                    Checking...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-5 w-5 fill-current" /> Check Availability
+                  </>
+                )}
+              </button>
+
               <button
                 type="button"
                 onClick={handleProceedToBook}
-                className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-gray-950 px-5 py-4 font-bold text-white shadow-md transition hover:bg-lime-500 hover:text-gray-950"
+                disabled={availabilityStatus.loading || availabilityStatus.available === false || checkingAvailability}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gray-950 px-5 py-4 font-bold text-white shadow-md transition hover:bg-lime-500 hover:text-gray-950 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500"
               >
-                <Zap className="h-5 w-5 fill-current" /> Book This Vehicle
+                <Zap className="h-5 w-5 fill-current" />
+                {availabilityStatus.loading
+                  ? "Checking..."
+                  : availabilityStatus.available === false
+                    ? "Not Available"
+                    : "Book This Vehicle"}
               </button>
 
               <p className="mt-3 text-center text-xs text-gray-400">

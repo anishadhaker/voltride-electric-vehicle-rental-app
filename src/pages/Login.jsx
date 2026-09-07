@@ -19,7 +19,7 @@ function Login() {
   const { login } = useAuth();
 
   const [method, setMethod] = useState("mobile"); // "mobile" or "email"
-  const [mobile, setMobile] = useState("9079872848");
+  const [mobile, setMobile] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -224,6 +224,7 @@ function Login() {
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
+
             </div>
 
             {/* Error and Success Banners */}
@@ -258,6 +259,14 @@ function Login() {
               )}
             </button>
           </form>
+
+          <button
+            type="button"
+            onClick={() => navigate("/forgot-password")}
+            className="mt-4 w-full text-center text-sm font-semibold text-gray-600 underline underline-offset-4 hover:text-lime-700"
+          >
+            Forgot Password?
+          </button>
 
           <p className="mt-8 border-t border-gray-100 pt-6 text-center text-sm text-gray-500">
             Don't have an account?{" "}

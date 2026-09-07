@@ -29,7 +29,6 @@ import {
   Zap,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { useBooking } from "../context/BookingContext";
 import { authAPI, bookingAPI } from "../services/api";
 
 const DEFAULT_PROFILE = {
@@ -54,30 +53,19 @@ const INITIAL_PAYMENT_METHODS = [
 
 function Profile() {
   const navigate = useNavigate();
-  const { bookings, stats } = useBooking();
   const { user, logout, updateUser } = useAuth();
 
   const [apiRides, setApiRides] = useState(null);
+  const [apiStats, setApiStats] = useState(null);
+  const [loadError, setLoadError] = useState("");
 
   const [profile, setProfile] = useState(() => {
-    try {
-      const cached = localStorage.getItem("voltride_demo_user");
-      const parsed = cached ? JSON.parse(cached) : {};
-      return {
-        ...DEFAULT_PROFILE,
-        ...parsed,
-        name: user?.name || parsed.name || DEFAULT_PROFILE.name,
-        email: user?.email || parsed.email || DEFAULT_PROFILE.email,
-        mobile: user?.mobile || parsed.mobile || DEFAULT_PROFILE.mobile,
-      };
-    } catch {
-      return {
-        ...DEFAULT_PROFILE,
-        name: user?.name || DEFAULT_PROFILE.name,
-        email: user?.email || DEFAULT_PROFILE.email,
-        mobile: user?.mobile || DEFAULT_PROFILE.mobile,
-      };
-    }
+    return {
+      ...DEFAULT_PROFILE,
+      name: user?.name || DEFAULT_PROFILE.name,
+      email: user?.email || DEFAULT_PROFILE.email,
+      mobile: user?.mobile || DEFAULT_PROFILE.mobile,
+    };
   });
 
   useEffect(() => {
@@ -97,7 +85,7 @@ function Profile() {
           }));
         }
       })
-      .catch(() => {});
+      .catch(() => setLoadError("Unable to refresh your profile right now."));
 
     // Fetch real rides from backend API
     bookingAPI
@@ -118,28 +106,32 @@ function Profile() {
           setApiRides(mapped);
         }
       })
-      .catch(() => {});
+      .catch(() => setLoadError("Unable to load your ride history right now."));
+
+    bookingAPI
+      .getMyStats()
+      .then((res) => {
+        if (isMounted && res?.data) setApiStats(res.data);
+      })
+      .catch(() => setLoadError("Unable to load your ride statistics right now."));
 
     return () => {
       isMounted = false;
     };
   }, []);
 
-  const displayedRides = apiRides || bookings;
+  const displayedRides = apiRides ?? [];
   const totalRides = displayedRides.length;
-  const upcomingRides = displayedRides.filter((r) => r.status === "Upcoming").length;
-  const completedRides = displayedRides.filter((r) => r.status === "Completed").length;
-  const totalAmountSpent = displayedRides
-    .filter((r) => r.status !== "Cancelled")
-    .reduce((sum, r) => sum + (Number(r.totalAmount) || 0), 0);
   const co2SavedKg = Math.round(totalRides * 4.2 * 10) / 10;
 
   const statsData = [
-    { label: "Total Rides", value: String(totalRides || stats.totalRides), icon: Bike, hint: "All-time bookings" },
-    { label: "Upcoming Rides", value: String(upcomingRides), icon: Clock3, hint: "Ready to ride" },
-    { label: "Completed Rides", value: String(completedRides), icon: CheckCircle2, hint: "Safe returns" },
-    { label: "Total Amount Spent", value: `₹${(totalAmountSpent || stats.totalAmountSpent).toLocaleString()}`, icon: IndianRupee, hint: "Clean energy cost" },
-    { label: "CO₂ Saved", value: `${co2SavedKg || stats.co2SavedKg} kg`, icon: Leaf, hint: "Green impact" },
+    { label: "Total Rides", value: String(apiStats?.totalRides ?? 0), icon: Bike, hint: "All-time bookings" },
+    { label: "Upcoming Rides", value: String(apiStats?.upcomingRides ?? 0), icon: Clock3, hint: "Ready to ride" },
+    { label: "Active Rides", value: String(apiStats?.activeRides ?? 0), icon: Zap, hint: "Currently active" },
+    { label: "Completed Rides", value: String(apiStats?.completedRides ?? 0), icon: CheckCircle2, hint: "Safe returns" },
+    { label: "Cancelled Rides", value: String(apiStats?.cancelledRides ?? 0), icon: X, hint: "Cancelled bookings" },
+    { label: "Total Amount Spent", value: `₹${(apiStats?.totalAmountSpent ?? 0).toLocaleString()}`, icon: IndianRupee, hint: "Clean energy cost" },
+    { label: "CO₂ Saved", value: `${co2SavedKg} kg`, icon: Leaf, hint: "Green impact" },
   ];
 
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -220,11 +212,6 @@ function Profile() {
     }
 
     setProfile(draftProfile);
-    try {
-      localStorage.setItem("voltride_demo_user", JSON.stringify(draftProfile));
-    } catch {
-      // ignore
-    }
     setEditModalOpen(false);
     showToast("Profile details updated successfully!");
   };
@@ -332,6 +319,11 @@ function Profile() {
 
   return (
     <main className="min-h-screen bg-[#f8faf9] px-6 pb-28 pt-32 lg:px-8">
+      {loadError && (
+        <div className="mx-auto mb-6 max-w-7xl rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {loadError}
+        </div>
+      )}
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-24 right-6 z-50 flex items-center gap-3 rounded-2xl bg-gray-950 px-5 py-3.5 text-sm font-semibold text-white shadow-xl">

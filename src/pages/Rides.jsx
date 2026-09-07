@@ -9,7 +9,6 @@ import {
   ShieldAlert,
   Sparkles,
 } from "lucide-react";
-import { useBooking } from "../context/BookingContext";
 import { bookingAPI } from "../services/api";
 
 const TABS = [
@@ -20,8 +19,9 @@ const TABS = [
 ];
 
 function Rides() {
-  const { bookings, cancelBooking } = useBooking();
   const [apiRides, setApiRides] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [activeTab, setActiveTab] = useState("Upcoming");
   const [cancelModalBooking, setCancelModalBooking] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
@@ -31,7 +31,7 @@ function Rides() {
     bookingAPI
       .getMyBookings()
       .then((res) => {
-        if (isMounted && res?.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
+        if (isMounted && res?.data?.data && Array.isArray(res.data.data)) {
           const mapped = res.data.data.map((b) => ({
             id: b.bookingId || b._id,
             vehicleName: b.vehicle?.name || "Electric Vehicle",
@@ -57,19 +57,23 @@ function Rides() {
             securityDeposit: b.securityDeposit,
             totalAmount: b.totalAmount,
             status: b.bookingStatus,
+            paymentStatus: b.paymentStatus,
           }));
           setApiRides(mapped);
         }
       })
       .catch(() => {
-        // Fallback to local bookings gracefully
+        if (isMounted) setLoadError("Unable to load your rides. Please try again.");
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
       });
     return () => {
       isMounted = false;
     };
   }, []);
 
-  const displayedBookings = apiRides || bookings;
+  const displayedBookings = apiRides ?? [];
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -122,12 +126,29 @@ function Rides() {
     }
   };
 
-  const handleConfirmCancel = () => {
+  const handleConfirmCancel = async () => {
     if (!cancelModalBooking) return;
     const bookingId = cancelModalBooking.id;
-    cancelBooking(bookingId);
-    setCancelModalBooking(null);
-    showToast(`Booking ${bookingId} was successfully cancelled.`);
+
+    try {
+      const response = await bookingAPI.cancel(bookingId);
+      if (response?.success === false) {
+        showToast(response.message || "Booking cancellation failed.");
+        setCancelModalBooking(null);
+        return;
+      }
+
+      setApiRides((prev) =>
+        prev?.map((ride) =>
+          ride.id === bookingId ? { ...ride, status: "Cancelled" } : ride
+        ) || []
+      );
+      setCancelModalBooking(null);
+      showToast(`Booking ${bookingId} was successfully cancelled.`);
+    } catch (error) {
+      showToast(error.message || "Unable to cancel this booking.");
+      setCancelModalBooking(null);
+    }
   };
 
   return (
@@ -196,7 +217,17 @@ function Rides() {
 
         {/* Rides List or Empty State */}
         <div className="mt-8">
-          {filteredBookings.length > 0 ? (
+          {loading ? (
+            <div className="rounded-3xl bg-white p-10 text-center shadow-sm ring-1 ring-gray-100">
+              <Bike className="mx-auto h-8 w-8 animate-pulse text-lime-600" />
+              <p className="mt-3 text-sm font-semibold text-gray-600">Loading your rides...</p>
+            </div>
+          ) : loadError ? (
+            <div className="rounded-3xl bg-white p-10 text-center shadow-sm ring-1 ring-gray-100">
+              <p className="text-sm font-semibold text-red-700">{loadError}</p>
+              <button type="button" onClick={() => window.location.reload()} className="mt-5 rounded-xl bg-gray-950 px-5 py-3 text-sm font-bold text-white">Retry</button>
+            </div>
+          ) : filteredBookings.length > 0 ? (
             <div className="space-y-6">
               {filteredBookings.map((ride) => (
                 <div
@@ -296,10 +327,10 @@ function Rides() {
                       )}
 
                       <Link
-                        to={`/booking-confirmation/${ride.id}`}
+                        to={`/my-rides/${ride.id}`}
                         className="rounded-xl bg-gray-100 px-4 py-2 text-xs font-bold text-gray-800 transition hover:bg-gray-200"
                       >
-                        View Receipt
+                        View Details
                       </Link>
                     </div>
                   </div>

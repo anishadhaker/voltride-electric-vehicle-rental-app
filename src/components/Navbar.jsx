@@ -70,6 +70,14 @@ function Navbar() {
         <div className="hidden items-center gap-4 md:flex">
           {isAuthenticated ? (
             <div className="flex items-center gap-3">
+              {user?.role === "admin" && (
+                <Link
+                  to="/admin"
+                  className="text-xs font-bold text-lime-700 transition hover:text-lime-900"
+                >
+                  Admin Dashboard
+                </Link>
+              )}
               <span className="text-xs font-semibold text-gray-700 hidden lg:inline">
                 Hi, {user?.name?.split(" ")[0] || "Rider"}
               </span>
@@ -175,17 +183,28 @@ function Navbar() {
             <div className="my-1 border-t border-gray-100" />
 
             {isAuthenticated ? (
-              <button
-                type="button"
-                onClick={() => {
-                  closeMenu();
-                  logout();
-                  navigate("/login");
-                }}
-                className="w-full rounded-xl border border-red-200 py-3 text-center text-sm font-bold text-red-600 transition hover:bg-red-50 flex items-center justify-center gap-2"
-              >
-                <LogOut className="h-4 w-4" /> Logout
-              </button>
+              <>
+                {user?.role === "admin" && (
+                  <Link
+                    to="/admin"
+                    onClick={closeMenu}
+                    className="w-full rounded-xl bg-lime-50 py-3 text-center text-sm font-bold text-lime-800"
+                  >
+                    Admin Dashboard
+                  </Link>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeMenu();
+                    logout();
+                    navigate("/login");
+                  }}
+                  className="w-full rounded-xl border border-red-200 py-3 text-center text-sm font-bold text-red-600 transition hover:bg-red-50 flex items-center justify-center gap-2"
+                >
+                  <LogOut className="h-4 w-4" /> Logout
+                </button>
+              </>
             ) : (
               <>
                 <button

@@ -11,19 +11,16 @@ import {
   ShieldCheck,
   User,
 } from "lucide-react";
-import { useBooking } from "../context/BookingContext";
 import { bookingAPI } from "../services/api";
 
 function BookingConfirmation() {
   const { bookingId } = useParams();
-  const { getBookingById } = useBooking();
-  const localBooking = getBookingById(bookingId);
   const [apiBooking, setApiBooking] = useState(null);
-  const [loading, setLoading] = useState(!localBooking && Boolean(bookingId));
+  const [loading, setLoading] = useState(Boolean(bookingId));
 
   useEffect(() => {
     let isMounted = true;
-    if (!localBooking && bookingId) {
+    if (bookingId) {
       bookingAPI
         .getById(bookingId)
         .then((res) => {
@@ -54,6 +51,7 @@ function BookingConfirmation() {
               securityDeposit: b.securityDeposit,
               totalAmount: b.totalAmount,
               status: b.bookingStatus,
+              paymentStatus: b.paymentStatus,
             });
           }
         })
@@ -67,9 +65,9 @@ function BookingConfirmation() {
     return () => {
       isMounted = false;
     };
-  }, [bookingId, localBooking]);
+  }, [bookingId]);
 
-  const booking = localBooking || apiBooking;
+  const booking = apiBooking;
 
   if (loading) {
     return (
@@ -237,6 +235,13 @@ function BookingConfirmation() {
             </div>
           </div>
 
+          <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm">
+            <span className="font-semibold text-gray-600">Payment status</span>
+            <span className={`rounded-full px-3 py-1 text-xs font-bold ${booking.paymentStatus === "Paid" ? "bg-lime-100 text-lime-900" : "bg-amber-100 text-amber-900"}`}>
+              {booking.paymentStatus || "Pending"}
+            </span>
+          </div>
+
           {/* Guarantee Badge */}
           <div className="flex items-center gap-3 rounded-2xl bg-gray-950 p-4 text-white text-xs">
             <ShieldCheck className="h-6 w-6 text-lime-400 shrink-0" />
@@ -252,6 +257,13 @@ function BookingConfirmation() {
               className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-gray-950 px-5 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-lime-500 hover:text-gray-950"
             >
               <Bike className="h-4 w-4" /> View My Rides
+            </Link>
+
+            <Link
+              to={`/my-rides/${booking.id}`}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-5 py-3.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
+            >
+              View Details
             </Link>
 
             <Link

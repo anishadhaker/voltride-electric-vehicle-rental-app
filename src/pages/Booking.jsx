@@ -16,7 +16,6 @@ import {
   Zap,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { useBooking } from "../context/BookingContext";
 import { getAllVehicles, getVehicleById } from "../data/vehicles";
 import { bookingAPI, vehicleAPI } from "../services/api";
 
@@ -25,7 +24,6 @@ const today = new Date().toISOString().split("T")[0];
 function Booking() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { addBooking } = useBooking();
   const { user } = useAuth();
 
   const [vehicle, setVehicle] = useState(() => {
@@ -66,6 +64,12 @@ function Booking() {
 
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [availabilityStatus, setAvailabilityStatus] = useState({
+    loading: false,
+    available: null,
+    message: "",
+  });
 
   const start =
     form.pickupDate && form.pickupTime
@@ -75,6 +79,71 @@ function Booking() {
     form.returnDate && form.returnTime
       ? new Date(`${form.returnDate}T${form.returnTime}`)
       : null;
+
+  const handleCheckAvailability = async () => {
+    const vehicleId = vehicle?._id || vehicle?.id;
+    if (!vehicleId) {
+      setAvailabilityStatus({
+        loading: false,
+        available: false,
+        message: "Vehicle not found.",
+      });
+      return;
+    }
+
+    if (!start || !end) {
+      setAvailabilityStatus({
+        loading: false,
+        available: false,
+        message: "Please select a valid pickup and return time.",
+      });
+      return;
+    }
+
+    if (isTimeOrderInvalid) {
+      setAvailabilityStatus({
+        loading: false,
+        available: false,
+        message: "Return date and time must be later than the pickup date and time.",
+      });
+      return;
+    }
+
+    setCheckingAvailability(true);
+    setAvailabilityStatus({
+      loading: true,
+      available: null,
+      message: "Checking availability...",
+    });
+
+    try {
+      const response = await vehicleAPI.checkAvailability(vehicleId, {
+        pickupDateTime: `${form.pickupDate}T${form.pickupTime}:00`,
+        returnDateTime: `${form.returnDate}T${form.returnTime}:00`,
+      });
+
+      const available = Boolean(response?.available);
+      setAvailabilityStatus({
+        loading: false,
+        available,
+        message:
+          response?.message ||
+          (available
+            ? "Vehicle is available for the selected time."
+            : "Vehicle is already booked for the selected time period"),
+      });
+    } catch (apiErr) {
+      const errorMessageText =
+        apiErr?.message || apiErr?.data?.message || "Unable to check availability. Please try again.";
+      setAvailabilityStatus({
+        loading: false,
+        available: false,
+        message: errorMessageText,
+      });
+    } finally {
+      setCheckingAvailability(false);
+    }
+  };
 
   const isTimeOrderInvalid = Boolean(start && end && end <= start);
 
@@ -99,7 +168,10 @@ function Booking() {
     form.customerName.trim() &&
     form.customerMobile.trim() &&
     form.terms &&
-    !isTimeOrderInvalid;
+    !isTimeOrderInvalid &&
+    availabilityStatus.available === true &&
+    !checkingAvailability &&
+    !availabilityStatus.loading;
 
   const updateForm = (field, value) => {
     setErrorMessage("");
@@ -114,6 +186,14 @@ function Booking() {
     }
     if (!form.terms) {
       setErrorMessage("Please agree to the rental terms and conditions to proceed.");
+      return;
+    }
+    if (checkingAvailability || availabilityStatus.loading) {
+      setErrorMessage("Checking availability. Please wait a moment and try again.");
+      return;
+    }
+    if (availabilityStatus.available === false) {
+      setErrorMessage(availabilityStatus.message || "This vehicle is not available for the selected time.");
       return;
     }
     if (!isValid) {
@@ -142,40 +222,19 @@ function Booking() {
         totalAmount,
       });
 
-      if (res?.data?.data) {
-        apiBookingRef = res.data.data.bookingId || res.data.data._id;
+      if (res?.data) {
+        apiBookingRef = res.data.bookingId || res.data._id || res.data?.data?.bookingId;
       }
+
+      setIsSubmitting(false);
+      navigate(`/payment/${apiBookingRef}`);
+      return;
     } catch (apiErr) {
-      console.warn("Backend booking API response:", apiErr?.response?.data?.message || apiErr.message);
+      const backendMessage = apiErr?.data?.message || apiErr?.message || "Booking request failed.";
+      setErrorMessage(backendMessage);
+      setIsSubmitting(false);
+      return;
     }
-
-    const createdBooking = addBooking({
-      id: apiBookingRef || undefined,
-      vehicleId: vehicle._id || vehicle.id,
-      vehicleName: vehicle.name,
-      vehicleType: vehicle.type,
-      vehicleBrand: vehicle.brand,
-      vehicleImage: vehicle.image,
-      pickupLocation: vehicle.location,
-      pickupDate: form.pickupDate,
-      pickupTime: form.pickupTime,
-      returnDate: form.returnDate,
-      returnTime: form.returnTime,
-      rentalHours,
-      pricePerHour,
-      rentalPrice,
-      serviceFee,
-      taxes,
-      securityDeposit,
-      totalAmount,
-      customerName: form.customerName,
-      customerMobile: form.customerMobile,
-      customerEmail: form.customerEmail,
-      status: "Upcoming",
-    });
-
-    setIsSubmitting(false);
-    navigate(`/booking-confirmation/${apiBookingRef || createdBooking.id}`);
   };
 
   return (
@@ -326,6 +385,41 @@ function Booking() {
                 Return date & time must be strictly after the pickup date & time.
               </div>
             )}
+
+            {!isTimeOrderInvalid && (
+              <div
+                className={`mt-4 flex items-center gap-2 rounded-2xl border p-3.5 text-xs font-semibold ${
+                  availabilityStatus.loading
+                    ? "border-blue-100 bg-blue-50 text-blue-700"
+                    : availabilityStatus.available === false
+                      ? "border-red-100 bg-red-50 text-red-700"
+                      : availabilityStatus.available === true
+                        ? "border-lime-100 bg-lime-50 text-lime-800"
+                        : "border-gray-100 bg-gray-50 text-gray-700"
+                }`}
+              >
+                <Clock3 className="h-4 w-4 shrink-0" />
+                {availabilityStatus.loading
+                  ? "Checking availability..."
+                  : availabilityStatus.message || "Select your rental period to check availability."}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleCheckAvailability}
+              disabled={checkingAvailability || !start || !end || isTimeOrderInvalid}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-lime-200 bg-lime-50 px-4 py-3 text-sm font-bold text-lime-800 transition hover:bg-lime-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-500"
+            >
+              {checkingAvailability ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Checking Availability...
+                </>
+              ) : (
+                <>Check Availability</>
+              )}
+            </button>
 
             <div className="mt-5 rounded-2xl bg-lime-50/70 p-4 border border-lime-100 flex items-center justify-between text-xs text-lime-900">
               <span className="flex items-center gap-2 font-semibold">
