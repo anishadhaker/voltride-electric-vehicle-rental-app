@@ -1,5 +1,5 @@
 export const BLOCKING_BOOKING_STATUSES = ["Upcoming", "Active"];
-export const UNAVAILABLE_VEHICLE_STATUSES = ["Maintenance", "Offline", "Charging"];
+export const UNAVAILABLE_VEHICLE_STATUSES = ["Unavailable", "Maintenance", "Offline", "Charging"];
 
 export const overlapsWithExistingBooking = (
   newPickup,
@@ -37,6 +37,10 @@ export const isVehicleBookingAllowed = (
       allowed: false,
       message: "Vehicle not found",
     };
+  }
+
+  if (vehicle.status === "Unavailable") {
+    return { allowed: false, message: "This vehicle is currently unavailable for booking." };
   }
 
   if (vehicle.status === "Maintenance") {

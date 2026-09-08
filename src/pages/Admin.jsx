@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { AlertCircle, BarChart3, Bike, CalendarDays, LayoutDashboard, Loader2, Plus, Users } from "lucide-react";
+import { AlertCircle, BarChart3, Bike, CalendarDays, Image, LayoutDashboard, Loader2, Pencil, Plus, Trash2, Users, X } from "lucide-react";
 import { adminAPI } from "../services/api";
 
 const sections = [
@@ -11,6 +11,8 @@ const sections = [
   ["/admin/analytics", "Analytics", BarChart3],
 ];
 
+const emptyVehicle = { name: "", brand: "", model: "", type: "Electric Scooter", registrationNumber: "", image: "", imagePublicId: "", location: "", battery: 100, range: 0, topSpeed: 0, chargingTime: "", pricePerHour: 0, pricePerDay: 0, rating: 4.8, status: "Available" };
+
 function Admin() {
   const location = useLocation();
   const section = location.pathname === "/admin" || location.pathname === "/admin/" ? "dashboard" : location.pathname.split("/").pop();
@@ -18,7 +20,12 @@ function Admin() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [vehicleForm, setVehicleForm] = useState({ name: "", brand: "", model: "", type: "Electric Scooter", registrationNumber: "", image: "", location: "", battery: 100, range: 0, topSpeed: 0, chargingTime: "", pricePerHour: 0, pricePerDay: 0 });
+  const [vehicleForm, setVehicleForm] = useState(emptyVehicle);
+  const [editingVehicle, setEditingVehicle] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState("");
 
   const loadSection = useCallback(async () => {
     setLoading(true);
@@ -46,19 +53,92 @@ function Admin() {
     return () => clearTimeout(timer);
   }, [loadSection]);
 
-  const createVehicle = async (event) => {
+  const saveVehicle = async (event) => {
     event.preventDefault();
     setError("");
+    setSuccess("");
+    setSubmitting(true);
     try {
-      await adminAPI.createVehicle({ ...vehicleForm, battery: Number(vehicleForm.battery), range: Number(vehicleForm.range), topSpeed: Number(vehicleForm.topSpeed), pricePerHour: Number(vehicleForm.pricePerHour), pricePerDay: Number(vehicleForm.pricePerDay) });
+      let image = vehicleForm.image;
+      let imagePublicId = vehicleForm.imagePublicId;
+      if (selectedImage) {
+        const upload = await adminAPI.uploadVehicleImage(selectedImage);
+        image = upload?.imageUrl || "";
+        imagePublicId = upload?.publicId || "";
+      }
+      if (!image) throw new Error("Please select an image before creating the vehicle.");
+      const payload = { ...vehicleForm, image, imagePublicId, battery: Number(vehicleForm.battery), range: Number(vehicleForm.range), topSpeed: Number(vehicleForm.topSpeed), pricePerHour: Number(vehicleForm.pricePerHour), pricePerDay: Number(vehicleForm.pricePerDay) };
+      if (editingVehicle) {
+        await adminAPI.updateVehicle(editingVehicle._id, payload);
+      } else {
+        await adminAPI.createVehicle(payload);
+      }
       setShowForm(false);
+      setEditingVehicle(null);
+      setSelectedImage(null);
+      setImagePreview("");
+      setVehicleForm(emptyVehicle);
+      setSuccess(editingVehicle ? "Vehicle updated successfully." : "Vehicle created successfully.");
       await loadSection();
     } catch (requestError) {
       setError(requestError.message || "Unable to create vehicle.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const rows = data?.data || [];
+  const startCreate = () => {
+    setEditingVehicle(null);
+    setVehicleForm(emptyVehicle);
+    setSelectedImage(null);
+    setImagePreview("");
+    setShowForm(true);
+  };
+
+  const startEdit = (vehicle) => {
+    setEditingVehicle(vehicle);
+    setVehicleForm({ ...emptyVehicle, ...vehicle });
+    setSelectedImage(null);
+    setImagePreview(vehicle.image || "");
+    setShowForm(true);
+    setError("");
+  };
+
+  const deleteVehicle = async (vehicle) => {
+    if (!window.confirm(`Delete ${vehicle.name}? This cannot be undone.`)) return;
+    setError("");
+    setSuccess("");
+    try {
+      await adminAPI.deleteVehicle(vehicle._id);
+      setSuccess(`${vehicle.name} deleted successfully.`);
+      await loadSection();
+    } catch (requestError) {
+      setError(requestError.message || "Unable to delete vehicle.");
+    }
+  };
+
+  const handleImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Please select an image file.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image must be 5 MB or smaller.");
+      return;
+    }
+    setError("");
+    setSelectedImage(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    setImagePreview("");
+  };
+
+  const rows = Array.isArray(data?.data) ? data.data : [];
   const counts = data?.data?.counts || {};
   const analytics = data?.data || {};
 
@@ -87,7 +167,7 @@ function Admin() {
               <h1 className="mt-2 text-4xl font-bold tracking-tight capitalize">{section}</h1>
             </div>
             {section === "vehicles" && (
-              <button type="button" onClick={() => setShowForm(!showForm)} className="flex items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3 text-sm font-bold text-white">
+              <button type="button" onClick={showForm ? () => setShowForm(false) : startCreate} className="flex items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3 text-sm font-bold text-white">
                 <Plus className="h-4 w-4" /> Add vehicle
               </button>
             )}
@@ -98,22 +178,36 @@ function Admin() {
               <AlertCircle className="h-4 w-4" /> {error}
             </div>
           )}
+          {success && <p className="mt-6 rounded-xl border border-lime-100 bg-lime-50 p-4 text-sm font-semibold text-lime-800">{success}</p>}
 
           {showForm && section === "vehicles" && (
-            <form onSubmit={createVehicle} className="mt-6 grid gap-3 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100 sm:grid-cols-2">
-              {Object.entries(vehicleForm).map(([field, value]) => (
+            <form onSubmit={saveVehicle} className="mt-6 grid gap-3 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100 sm:grid-cols-2">
+              {Object.entries(vehicleForm).filter(([field]) => !["image", "imagePublicId"].includes(field)).map(([field, value]) => (
                 <label key={field} className="text-xs font-bold capitalize text-gray-700">
                   {field.replace(/([A-Z])/g, " $1")}
-                  <input
-                    required={!['image', 'battery', 'range', 'topSpeed', 'pricePerHour', 'pricePerDay'].includes(field)}
-                    type={typeof value === "number" ? "number" : "text"}
-                    value={value}
-                    onChange={(event) => setVehicleForm({ ...vehicleForm, [field]: event.target.value })}
-                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-lime-500"
-                  />
+                  {field === "status" ? (
+                    <select value={value} onChange={(event) => setVehicleForm({ ...vehicleForm, [field]: event.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-lime-500">
+                      <option value="Available">Available</option><option value="Unavailable">Unavailable</option><option value="Maintenance">Maintenance</option><option value="Charging">Charging</option><option value="Offline">Offline</option><option value="Booked">Booked</option><option value="In Use">In Use</option>
+                    </select>
+                  ) : (
+                    <input required={!['image', 'battery', 'range', 'topSpeed', 'pricePerHour', 'pricePerDay'].includes(field)} type={typeof value === "number" ? "number" : "text"} value={value} onChange={(event) => setVehicleForm({ ...vehicleForm, [field]: event.target.value })} className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-lime-500" />
+                  )}
                 </label>
               ))}
-              <button type="submit" className="rounded-xl bg-lime-400 px-4 py-3 text-sm font-bold text-gray-950 sm:col-span-2">Create vehicle</button>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-700">
+                    Vehicle image
+                    <input type="file" accept="image/*" capture="environment" onChange={handleImageChange} className="mt-1 block w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-normal" />
+                  </label>
+                  {imagePreview && (
+                    <div className="relative mt-3 w-fit">
+                      <img src={imagePreview} alt="Selected vehicle preview" className="h-40 w-56 rounded-xl object-cover ring-1 ring-gray-200" />
+                      <button type="button" onClick={removeImage} aria-label="Remove selected image" className="absolute right-2 top-2 rounded-full bg-gray-950 p-1.5 text-white"><X className="h-4 w-4" /></button>
+                    </div>
+                  )}
+                  {!imagePreview && <div className="mt-3 flex h-24 items-center justify-center rounded-xl border border-dashed border-gray-300 text-sm text-gray-400"><Image className="mr-2 h-4 w-4" /> No image selected</div>}
+                </div>
+                <button type="submit" disabled={submitting} className="rounded-xl bg-lime-400 px-4 py-3 text-sm font-bold text-gray-950 disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2">{submitting ? "Saving vehicle..." : editingVehicle ? "Save changes" : "Create vehicle"}</button>
             </form>
           )}
 
@@ -137,15 +231,17 @@ function Admin() {
                     <th className="px-5 py-4">Location</th>
                     <th className="px-5 py-4">Status</th>
                     <th className="px-5 py-4">Price / Day</th>
+                                      <th className="px-5 py-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {rows.map((item) => (
                     <tr key={item._id}>
-                      <td className="px-5 py-4 font-bold text-gray-950">{item.name}</td>
+                      <td className="px-5 py-4"><div className="flex items-center gap-3"><div className="h-12 w-16 overflow-hidden rounded-lg bg-gray-100">{item.image ? <img src={item.image} alt={item.name} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[10px] text-gray-400">No image</div>}</div><div><p className="font-bold text-gray-950">{item.name}</p><p className="text-xs text-gray-500">{item.type}</p></div></div></td>
                       <td className="px-5 py-4 text-gray-600">{item.location}</td>
-                      <td className="px-5 py-4 font-semibold text-lime-700">{item.status}</td>
+                      <td className={`px-5 py-4 font-semibold ${item.status === "Available" ? "text-lime-700" : "text-red-600"}`}>{item.status === "Available" ? "Available" : "Unavailable"}</td>
                       <td className="px-5 py-4 text-gray-600">₹{item.pricePerDay}</td>
+                      <td className="px-5 py-4"><div className="flex gap-2"><button type="button" onClick={() => startEdit(item)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-bold text-gray-700 hover:border-lime-500"><Pencil className="h-3.5 w-3.5" /> Edit</button><button type="button" onClick={() => deleteVehicle(item)} className="inline-flex items-center gap-1 rounded-lg border border-red-100 px-2.5 py-2 text-xs font-bold text-red-600 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /> Delete</button></div></td>
                     </tr>
                   ))}
                 </tbody>

@@ -8,7 +8,7 @@ import {
   Zap,
 } from "lucide-react";
 
-function Hero() {
+function Hero({ vehicle }) {
   const navigate = useNavigate();
 
   return (
@@ -80,11 +80,7 @@ function Hero() {
 
             <div className="relative overflow-hidden rounded-[2rem] bg-gray-900 shadow-2xl">
 
-              <img
-                src="https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=85"
-                alt="Electric motorcycle"
-                className="h-[480px] w-full object-cover"
-              />
+              {vehicle?.image ? <img src={vehicle.image} alt={vehicle.name} className="h-[480px] w-full object-cover" /> : <div className="flex h-[480px] items-center justify-center text-sm text-gray-400">Vehicle image unavailable</div>}
 
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
 
@@ -106,17 +102,17 @@ function Hero() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
-                        Electric Bike
+                        {vehicle?.type || "Electric vehicle"}
                       </p>
 
                       <h3 className="mt-1 text-xl font-bold text-gray-950">
-                        Revolt RV400
+                        {vehicle?.name || "Explore electric rides"}
                       </h3>
                     </div>
 
                     <div>
                       <p className="text-lg font-bold text-gray-950">
-                        ₹69
+                        ₹{vehicle?.pricePerHour || "--"}
                         <span className="text-sm font-medium text-gray-500">
                           /hr
                         </span>

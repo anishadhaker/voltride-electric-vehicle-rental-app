@@ -54,8 +54,7 @@ function Rides() {
             rentalPrice: b.rentalPrice,
             serviceFee: b.serviceFee,
             taxes: b.taxes,
-            securityDeposit: b.securityDeposit,
-            totalAmount: b.totalAmount,
+            totalAmount: (Number(b.rentalPrice) || 0) + (Number(b.serviceFee) || 0) + (Number(b.taxes) || 0),
             status: b.bookingStatus,
             paymentStatus: b.paymentStatus,
           }));
@@ -391,7 +390,7 @@ function Rides() {
 
             <div className="mt-4 rounded-2xl bg-gray-50 p-3.5 text-xs text-gray-600 border border-gray-100 space-y-1">
               <p>
-                &bull; Your refundable security deposit of <strong>₹500</strong> will remain uncharged.
+                &bull; Your ride pricing includes only the rental, service fee, and applicable taxes.
               </p>
               <p>
                 &bull; The booking will be moved to your <strong>Cancelled</strong> tab.

@@ -157,8 +157,7 @@ function Booking() {
   const rentalPrice = rentalHours * pricePerHour;
   const serviceFee = 10;
   const taxes = Math.round(rentalPrice * 0.05);
-  const securityDeposit = 500;
-  const totalAmount = rentalPrice + serviceFee + taxes + securityDeposit;
+  const totalAmount = rentalPrice + serviceFee + taxes;
 
   const isValid =
     form.pickupDate &&
@@ -218,7 +217,6 @@ function Booking() {
         rentalPrice,
         serviceFee,
         taxes,
-        securityDeposit,
         totalAmount,
       });
 
@@ -492,7 +490,7 @@ function Booking() {
                 className="mt-1 h-4 w-4 rounded-md accent-lime-500 cursor-pointer"
               />
               <span className="text-xs leading-relaxed text-gray-600">
-                I agree to the VoltRide Rental Terms, certify that I possess a valid driving license, and acknowledge that the ₹500 security deposit will be automatically refunded upon safe vehicle return.
+                I agree to the VoltRide Rental Terms and certify that I possess a valid driving license.
               </span>
             </label>
 
@@ -547,16 +545,11 @@ function Booking() {
                 <span className="font-semibold text-white">₹{taxes}</span>
               </div>
 
-              <div className="flex justify-between text-gray-300">
-                <span>Refundable Security Deposit</span>
-                <span className="font-semibold text-white">₹{securityDeposit}</span>
-              </div>
-
               <div className="border-t border-gray-800 pt-4">
                 <div className="flex items-baseline justify-between">
                   <div>
                     <p className="text-base font-bold text-white">Total Payable</p>
-                    <p className="text-[11px] text-gray-400">Includes ₹500 refundable deposit</p>
+                    <p className="text-[11px] text-gray-400">Rental, service fee, and taxes</p>
                   </div>
                   <p className="text-2xl font-extrabold text-lime-400">₹{totalAmount}</p>
                 </div>

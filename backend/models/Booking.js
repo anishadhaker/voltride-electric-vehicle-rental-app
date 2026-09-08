@@ -52,11 +52,6 @@ const bookingSchema = new mongoose.Schema(
       required: [true, "Taxes amount is required"],
       min: [0, "Taxes cannot be negative"],
     },
-    securityDeposit: {
-      type: Number,
-      default: 500,
-      min: [0, "Security deposit cannot be negative"],
-    },
     totalAmount: {
       type: Number,
       required: [true, "Total amount is required"],

@@ -146,9 +146,8 @@ function VehicleDetails() {
 
   const pricePerHour = vehicle.pricePerHour || vehicle.price || 59;
   const pricePerDay = vehicle.pricePerDay || vehicle.dailyPrice || 999;
-  const deposit = 500;
   const estimatedRental = rentalHours * pricePerHour;
-  const estimatedTotal = estimatedRental + 10 + Math.round(estimatedRental * 0.05) + deposit;
+  const estimatedTotal = estimatedRental + 10 + Math.round(estimatedRental * 0.05);
 
   const updateBooking = (field, value) => {
     setBooking((current) => ({ ...current, [field]: value }));
@@ -205,11 +204,11 @@ function VehicleDetails() {
         {/* Left Column: Image & Quick Specs */}
         <div>
           <div className="relative overflow-hidden rounded-[2.5rem] bg-gray-950 shadow-xl ring-1 ring-gray-100">
-            <img
-              src={vehicle.image}
-              alt={vehicle.name}
-              className="h-[380px] w-full object-cover sm:h-[500px]"
-            />
+            {vehicle.image ? (
+              <img src={vehicle.image} alt={vehicle.name} className="h-[380px] w-full object-cover sm:h-[500px]" />
+            ) : (
+              <div className="flex h-[380px] items-center justify-center text-sm font-semibold text-gray-400 sm:h-[500px]">Image unavailable</div>
+            )}
 
             <div className="absolute left-6 top-6 flex items-center gap-2 rounded-full bg-white/95 backdrop-blur-xs px-4 py-2 text-xs font-bold text-gray-900 shadow-md">
               <span className="h-2.5 w-2.5 rounded-full bg-lime-500 animate-pulse" />
@@ -370,12 +369,6 @@ function VehicleDetails() {
                   Per Day
                 </p>
               </div>
-              <div>
-                <p className="text-xl font-extrabold text-gray-950">₹{deposit}</p>
-                <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                  Deposit
-                </p>
-              </div>
             </div>
 
             {/* Quick Time Selector Preview */}
@@ -499,7 +492,7 @@ function VehicleDetails() {
               </button>
 
               <p className="mt-3 text-center text-xs text-gray-400">
-                Transparent pricing. Refundable ₹500 deposit included.
+                Transparent pricing with no hidden charges.
               </p>
             </div>
           </div>

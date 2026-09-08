@@ -2,6 +2,12 @@ import Booking from "../models/Booking.js";
 import Vehicle from "../models/Vehicle.js";
 import { isMongoConnected, memoryStore } from "../config/memoryStore.js";
 import { isVehicleBookingAllowed } from "../utils/bookingAvailability.js";
+import { findVehicleByIdentifier } from "../utils/vehicleIdentifier.js";
+
+const bookingTotal = (booking) =>
+  (Number(booking.rentalPrice) || 0) +
+  (Number(booking.serviceFee) || 0) +
+  (Number(booking.taxes) || 0);
 
 // @desc    Get all bookings (Admin or general listing)
 // @route   GET /api/bookings
@@ -78,7 +84,7 @@ export const getMyStats = async (req, res, next) => {
       cancelledRides: bookings.filter((booking) => booking.bookingStatus === "Cancelled").length,
       totalAmountSpent: bookings
         .filter((booking) => booking.bookingStatus !== "Cancelled")
-        .reduce((total, booking) => total + (Number(booking.totalAmount) || 0), 0),
+        .reduce((total, booking) => total + bookingTotal(booking), 0),
     };
 
     res.status(200).json({ success: true, data: stats });
@@ -167,7 +173,7 @@ export const checkVehicleAvailability = async (req, res, next) => {
     }
 
     const vehicleDoc = isMongoConnected()
-      ? await Vehicle.findById(vehicleId)
+      ? await findVehicleByIdentifier(Vehicle, vehicleId)
       : await memoryStore.vehicles.findById(vehicleId);
 
     if (!vehicleDoc) {
@@ -226,7 +232,7 @@ export const createBooking = async (req, res, next) => {
     }
 
     const vehicleDoc = isMongoConnected()
-      ? await Vehicle.findById(targetVehicleId)
+      ? await findVehicleByIdentifier(Vehicle, targetVehicleId)
       : await memoryStore.vehicles.findById(targetVehicleId);
 
     if (!vehicleDoc) {
@@ -275,12 +281,10 @@ export const createBooking = async (req, res, next) => {
     const calculatedRentalPrice = calculatedDuration * vehicleDoc.pricePerHour;
     const calculatedServiceFee = 10;
     const calculatedTaxes = Math.round(calculatedRentalPrice * 0.05);
-    const calculatedSecurityDeposit = 500;
     const calculatedTotal =
       calculatedRentalPrice +
       calculatedServiceFee +
-      calculatedTaxes +
-      calculatedSecurityDeposit;
+      calculatedTaxes;
 
     let bookingId = req.body.bookingId;
     if (!bookingId) {
@@ -307,7 +311,6 @@ export const createBooking = async (req, res, next) => {
         rentalPrice: calculatedRentalPrice,
         serviceFee: calculatedServiceFee,
         taxes: calculatedTaxes,
-        securityDeposit: calculatedSecurityDeposit,
         totalAmount: calculatedTotal,
         bookingStatus: "Upcoming",
         paymentStatus: "Pending",
@@ -335,7 +338,6 @@ export const createBooking = async (req, res, next) => {
       rentalPrice: calculatedRentalPrice,
       serviceFee: calculatedServiceFee,
       taxes: calculatedTaxes,
-      securityDeposit: calculatedSecurityDeposit,
       totalAmount: calculatedTotal,
       bookingStatus: "Upcoming",
       paymentStatus: "Pending",

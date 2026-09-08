@@ -28,6 +28,9 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = getStoredToken();
+    if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
+    }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -179,6 +182,11 @@ export const bookingAPI = {
 export const adminAPI = {
   getDashboard: async () => (await api.get("/admin/dashboard")).data,
   getVehicles: async () => (await api.get("/admin/vehicles")).data,
+  uploadVehicleImage: async (file) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    return (await api.post("/admin/vehicles/upload", formData)).data;
+  },
   createVehicle: async (vehicle) => (await api.post("/admin/vehicles", vehicle)).data,
   updateVehicle: async (id, vehicle) => (await api.put(`/admin/vehicles/${id}`, vehicle)).data,
   deleteVehicle: async (id) => (await api.delete(`/admin/vehicles/${id}`)).data,

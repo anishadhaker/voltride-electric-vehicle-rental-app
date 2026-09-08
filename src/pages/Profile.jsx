@@ -100,7 +100,7 @@ function Profile() {
             pickupLocation: b.pickupLocation || b.vehicle?.location || "VoltRide Hub",
             pickupDate: new Date(b.pickupDateTime).toLocaleDateString(),
             rentalHours: b.duration,
-            totalAmount: b.totalAmount,
+            totalAmount: (Number(b.rentalPrice) || 0) + (Number(b.serviceFee) || 0) + (Number(b.taxes) || 0),
             status: b.bookingStatus,
           }));
           setApiRides(mapped);

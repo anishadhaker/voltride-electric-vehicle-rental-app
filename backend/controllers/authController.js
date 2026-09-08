@@ -300,7 +300,10 @@ export const forgotPassword = async (req, res, next) => {
     } catch (emailError) {
       await updateResetUser(user, clearResetState());
       console.error("Password reset email delivery failed:", emailError.message);
-      return res.status(200).json({ success: true, message: genericResetMessage });
+      return res.status(503).json({
+        success: false,
+        message: "Unable to send the reset code right now. Please try again later.",
+      });
     }
 
     return res.status(200).json({ success: true, message: genericResetMessage });

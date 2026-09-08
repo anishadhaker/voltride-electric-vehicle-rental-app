@@ -48,8 +48,7 @@ function BookingConfirmation() {
               rentalPrice: b.rentalPrice,
               serviceFee: b.serviceFee,
               taxes: b.taxes,
-              securityDeposit: b.securityDeposit,
-              totalAmount: b.totalAmount,
+              totalAmount: (Number(b.rentalPrice) || 0) + (Number(b.serviceFee) || 0) + (Number(b.taxes) || 0),
               status: b.bookingStatus,
               paymentStatus: b.paymentStatus,
             });
@@ -220,15 +219,9 @@ function BookingConfirmation() {
                 <span>Taxes & Cess (5%)</span>
                 <span className="font-semibold text-gray-900">₹{booking.taxes}</span>
               </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Security Deposit (Refundable)</span>
-                <span className="font-semibold text-gray-900">₹{booking.securityDeposit}</span>
-              </div>
-
               <div className="border-t border-gray-200 pt-3.5 flex justify-between items-baseline">
                 <div>
                   <span className="text-base font-bold text-gray-950">Total Amount</span>
-                  <span className="ml-2 text-xs text-gray-500">(Includes refundable deposit)</span>
                 </div>
                 <span className="text-2xl font-extrabold text-lime-700">₹{booking.totalAmount}</span>
               </div>
@@ -246,7 +239,7 @@ function BookingConfirmation() {
           <div className="flex items-center gap-3 rounded-2xl bg-gray-950 p-4 text-white text-xs">
             <ShieldCheck className="h-6 w-6 text-lime-400 shrink-0" />
             <p className="leading-relaxed text-gray-300">
-              Zero-carbon mobility guaranteed. Your ₹500 security deposit is automatically refunded within 2 hours of vehicle drop-off.
+              Zero-carbon mobility guaranteed. Your rental total includes the ride, service fee, and applicable taxes.
             </p>
           </div>
 

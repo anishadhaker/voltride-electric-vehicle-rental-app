@@ -1,5 +1,6 @@
 import Vehicle from "../models/Vehicle.js";
 import { isMongoConnected, memoryStore } from "../config/memoryStore.js";
+import { findVehicleByIdentifier } from "../utils/vehicleIdentifier.js";
 
 // @desc    Get all vehicles
 // @route   GET /api/vehicles
@@ -7,9 +8,9 @@ import { isMongoConnected, memoryStore } from "../config/memoryStore.js";
 export const getVehicles = async (req, res, next) => {
   try {
     const { status, type, location } = req.query;
-    const filter = {};
+    const filter = { status: "Available" };
 
-    if (status) filter.status = status;
+    if (status && status === "Available") filter.status = status;
     if (type) filter.type = type;
     if (location) filter.location = new RegExp(location, "i");
 
@@ -33,7 +34,7 @@ export const getVehicles = async (req, res, next) => {
 export const getVehicleById = async (req, res, next) => {
   try {
     const vehicle = isMongoConnected()
-      ? await Vehicle.findById(req.params.id)
+      ? await findVehicleByIdentifier(Vehicle, req.params.id)
       : await memoryStore.vehicles.findById(req.params.id);
 
     if (!vehicle) {

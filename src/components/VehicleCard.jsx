@@ -10,11 +10,11 @@ function VehicleCard({ vehicle }) {
     <div className="group overflow-hidden rounded-3xl border border-gray-100 bg-white transition duration-300 hover:-translate-y-1 hover:shadow-xl flex flex-col justify-between">
       <div>
         <div className="relative overflow-hidden bg-gray-100">
-          <img
-            src={vehicle.image}
-            alt={vehicle.name}
-            className="h-56 w-full object-cover transition duration-500 group-hover:scale-105"
-          />
+          {vehicle.image ? (
+            <img src={vehicle.image} alt={vehicle.name} className="h-56 w-full object-cover transition duration-500 group-hover:scale-105" />
+          ) : (
+            <div className="flex h-56 items-center justify-center text-sm font-semibold text-gray-400">Image unavailable</div>
+          )}
 
           <div className="absolute left-4 top-4 flex items-center gap-2">
             <span className="rounded-full bg-white/95 backdrop-blur-xs px-3 py-1 text-xs font-bold text-gray-900 shadow-sm">

@@ -17,6 +17,13 @@ const vehicleSchema = new mongoose.Schema(
       required: [true, "Vehicle model is required"],
       trim: true,
     },
+    slug: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      unique: true,
+      sparse: true,
+    },
     type: {
       type: String,
       required: [true, "Vehicle type is required"],
@@ -35,6 +42,10 @@ const vehicleSchema = new mongoose.Schema(
     image: {
       type: String,
       required: [true, "Vehicle image URL is required"],
+    },
+    imagePublicId: {
+      type: String,
+      default: "",
     },
     location: {
       type: String,
@@ -84,6 +95,7 @@ const vehicleSchema = new mongoose.Schema(
       enum: {
         values: [
           "Available",
+          "Unavailable",
           "Booked",
           "In Use",
           "Charging",

@@ -231,7 +231,7 @@ function Register() {
                   type="text"
                   value={form.name}
                   onChange={(e) => updateField("name", e.target.value)}
-                  placeholder="e.g. Anisha Sharma"
+                  placeholder="e.g. your name"
                   className={`w-full rounded-xl border px-3.5 py-3 pl-11 text-sm font-normal text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-lime-500 focus:ring-2 focus:ring-lime-100 ${
                     errors.name ? "border-red-300 bg-red-50/20" : "border-gray-200"
                   }`}
@@ -263,7 +263,7 @@ function Register() {
                     maxLength={10}
                     value={form.mobile}
                     onChange={(e) => updateField("mobile", e.target.value.replace(/\D/g, ""))}
-                    placeholder="90798 72848"
+                    placeholder="xxxx-xxx-xxx"
                     className={`w-full rounded-r-xl border px-3.5 py-3 pl-11 text-sm font-normal text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-lime-500 focus:ring-2 focus:ring-lime-100 ${
                       errors.mobile ? "border-red-300 bg-red-50/20" : "border-gray-200"
                     }`}

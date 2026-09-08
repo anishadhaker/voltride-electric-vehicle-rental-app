@@ -1,13 +1,37 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { AlertCircle, Loader2 } from "lucide-react";
 import Hero from "../components/Hero";
 import VehicleCard from "../components/VehicleCard";
-
-import { vehicles } from "../data/vehicles";
+import { vehicleAPI } from "../services/api";
 
 function Home() {
+  const [vehicles, setVehicles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+    vehicleAPI.getAll()
+      .then((response) => {
+        const list = Array.isArray(response?.data) ? response.data : [];
+        if (isMounted) setVehicles(list);
+      })
+      .catch((requestError) => {
+        if (isMounted) setError(requestError.message || "Unable to load vehicles.");
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <>
-      <Hero />
+      <Hero vehicle={vehicles[0]} />
       <section id="vehicles" className="mx-auto max-w-7xl px-6 py-28 lg:px-8">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>
@@ -24,11 +48,10 @@ function Home() {
             View all vehicles &rarr;
           </Link>
         </div>
-        <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {vehicles.map((vehicle) => (
-            <VehicleCard key={vehicle.name} vehicle={vehicle} />
-          ))}
-        </div>
+        {loading && <div className="mt-12 flex items-center justify-center py-16 text-gray-500"><Loader2 className="mr-3 h-6 w-6 animate-spin text-lime-600" /> Loading vehicles...</div>}
+        {error && <div className="mt-12 flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-700"><AlertCircle className="h-4 w-4" /> {error}</div>}
+        {!loading && !error && vehicles.length === 0 && <p className="mt-12 rounded-2xl border border-dashed border-gray-300 p-12 text-center text-gray-500">No vehicles are available right now.</p>}
+        {!loading && !error && vehicles.length > 0 && <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">{vehicles.map((vehicle) => <VehicleCard key={vehicle._id || vehicle.name} vehicle={vehicle} />)}</div>}
       </section>
       <section id="how-it-works" className="bg-gray-950 px-6 py-24 text-white">
         <div className="mx-auto max-w-7xl">

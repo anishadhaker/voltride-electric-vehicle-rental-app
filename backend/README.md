@@ -52,18 +52,14 @@ MONGODB_URI=mongodb://127.0.0.1:27017/voltride
 # JWT Authentication Secret Key
 JWT_SECRET=your_jwt_secret_key_here
 
-# Password reset email delivery (SMTP)
-EMAIL_HOST=smtp.example.com
-EMAIL_PORT=587
-EMAIL_SECURE=false
-EMAIL_USER=your-smtp-username
-EMAIL_PASSWORD=your-smtp-password
-EMAIL_FROM=VoltRide <no-reply@example.com>
+# Password reset email delivery (Gmail + Nodemailer)
+EMAIL_USER=your_voltride_gmail_address@gmail.com
+EMAIL_APP_PASSWORD=your_google_app_password
 ```
 
 > **Security Note**: `.env` is ignored by Git in both root and backend `.gitignore`. Never commit real credentials or secrets to version control.
 
-For local transport-only testing, set `EMAIL_TRANSPORT=json`. This validates the Nodemailer path without delivering email; use real SMTP variables for the actual OTP flow. Never put SMTP credentials in frontend code.
+Password reset emails are sent through Gmail using Nodemailer. Keep `EMAIL_USER` and `EMAIL_APP_PASSWORD` (Google App Password) only in the backend environment; never put them in frontend code.
 
 ---
 
@@ -208,7 +204,6 @@ When running, the server output displays:
   "rentalPrice": 236,
   "serviceFee": 10,
   "taxes": 12,
-  "securityDeposit": 500,
   "totalAmount": 758
 }
 ```

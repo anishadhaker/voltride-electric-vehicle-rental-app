@@ -163,7 +163,7 @@ function Login() {
                         setMobile(event.target.value.replace(/\D/g, ""));
                         clearMessages();
                       }}
-                      placeholder="90798 72848"
+                      placeholder="xxxx-xxx-xxx"
                       className="w-full rounded-r-xl border border-gray-200 px-3.5 py-3 pl-11 text-sm font-normal text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-lime-500 focus:ring-2 focus:ring-lime-100"
                     />
                   </div>
