@@ -16,8 +16,16 @@ import {
 } from "lucide-react";
 import { getAllVehicles, getVehicleById } from "../data/vehicles";
 import { vehicleAPI } from "../services/api";
+import {
+  PAST_DATE_TIME_ERROR,
+  getLocalDateString,
+  getLocalTimeString,
+  isPastDateTime,
+  createLocalISOString,
+  getInitialBookingTimes,
+} from "../utils/dateTimeUtils";
 
-const today = new Date().toISOString().split("T")[0];
+const today = getLocalDateString();
 
 function DetailItem({ icon: Icon, label, value }) {
   return (
@@ -58,11 +66,14 @@ function VehicleDetails() {
   }, [currentId]);
 
   const [favorite, setFavorite] = useState(false);
-  const [booking, setBooking] = useState({
-    pickupDate: today,
-    pickupTime: "10:00",
-    returnDate: today,
-    returnTime: "14:00",
+  const [booking, setBooking] = useState(() => {
+    const initial = getInitialBookingTimes();
+    return {
+      pickupDate: initial.pickupDate,
+      pickupTime: initial.pickupTime,
+      returnDate: initial.returnDate,
+      returnTime: initial.returnTime,
+    };
   });
   const [availabilityStatus, setAvailabilityStatus] = useState({
     loading: false,
@@ -73,6 +84,7 @@ function VehicleDetails() {
 
   const start = booking.pickupDate && booking.pickupTime ? new Date(`${booking.pickupDate}T${booking.pickupTime}`) : null;
   const end = booking.returnDate && booking.returnTime ? new Date(`${booking.returnDate}T${booking.returnTime}`) : null;
+  const isPickupPast = isPastDateTime(booking.pickupDate, booking.pickupTime);
   const invalidTimeOrder = Boolean(start && end && end <= start);
 
   const handleCheckAvailability = async () => {
@@ -95,6 +107,15 @@ function VehicleDetails() {
       return;
     }
 
+    if (isPickupPast) {
+      setAvailabilityStatus({
+        loading: false,
+        available: false,
+        message: PAST_DATE_TIME_ERROR,
+      });
+      return;
+    }
+
     if (invalidTimeOrder) {
       setAvailabilityStatus({
         loading: false,
@@ -113,8 +134,8 @@ function VehicleDetails() {
 
     try {
       const response = await vehicleAPI.checkAvailability(currentVehicleId, {
-        pickupDateTime: `${booking.pickupDate}T${booking.pickupTime}:00`,
-        returnDateTime: `${booking.returnDate}T${booking.returnTime}:00`,
+        pickupDateTime: createLocalISOString(booking.pickupDate, booking.pickupTime),
+        returnDateTime: createLocalISOString(booking.returnDate, booking.returnTime),
       });
 
       const available = Boolean(response?.available);
@@ -150,7 +171,23 @@ function VehicleDetails() {
   const estimatedTotal = estimatedRental + 10 + Math.round(estimatedRental * 0.05);
 
   const updateBooking = (field, value) => {
-    setBooking((current) => ({ ...current, [field]: value }));
+    setBooking((current) => {
+      const next = { ...current, [field]: value };
+      if (isPastDateTime(next.pickupDate, next.pickupTime)) {
+        setAvailabilityStatus({
+          loading: false,
+          available: false,
+          message: PAST_DATE_TIME_ERROR,
+        });
+      } else if (availabilityStatus.message === PAST_DATE_TIME_ERROR) {
+        setAvailabilityStatus({
+          loading: false,
+          available: null,
+          message: "",
+        });
+      }
+      return next;
+    });
   };
 
   const shareVehicle = async () => {
@@ -167,6 +204,14 @@ function VehicleDetails() {
   };
 
   const handleProceedToBook = () => {
+    if (isPickupPast) {
+      setAvailabilityStatus((prev) => ({
+        ...prev,
+        available: false,
+        message: PAST_DATE_TIME_ERROR,
+      }));
+      return;
+    }
     if (checkingAvailability || availabilityStatus.loading) {
       setAvailabilityStatus((prev) => ({
         ...prev,
@@ -397,6 +442,7 @@ function VehicleDetails() {
                   </label>
                   <input
                     type="time"
+                    min={booking.pickupDate === today ? getLocalTimeString() : undefined}
                     value={booking.pickupTime}
                     onChange={(e) => updateBooking("pickupTime", e.target.value)}
                     className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-900 outline-none focus:border-lime-500"
@@ -408,7 +454,7 @@ function VehicleDetails() {
                   </label>
                   <input
                     type="date"
-                    min={booking.pickupDate}
+                    min={booking.pickupDate || today}
                     value={booking.returnDate}
                     onChange={(e) => updateBooking("returnDate", e.target.value)}
                     className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-900 outline-none focus:border-lime-500"
@@ -420,6 +466,7 @@ function VehicleDetails() {
                   </label>
                   <input
                     type="time"
+                    min={booking.returnDate === booking.pickupDate ? booking.pickupTime : undefined}
                     value={booking.returnTime}
                     onChange={(e) => updateBooking("returnTime", e.target.value)}
                     className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-900 outline-none focus:border-lime-500"
@@ -462,7 +509,7 @@ function VehicleDetails() {
               <button
                 type="button"
                 onClick={handleCheckAvailability}
-                disabled={checkingAvailability || !start || !end || invalidTimeOrder}
+                disabled={checkingAvailability || !start || !end || invalidTimeOrder || isPickupPast}
                 className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-lime-200 bg-lime-50 px-5 py-4 font-bold text-lime-800 shadow-sm transition hover:bg-lime-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-500"
               >
                 {checkingAvailability ? (
@@ -480,7 +527,7 @@ function VehicleDetails() {
               <button
                 type="button"
                 onClick={handleProceedToBook}
-                disabled={availabilityStatus.loading || availabilityStatus.available === false || checkingAvailability}
+                disabled={availabilityStatus.loading || availabilityStatus.available === false || checkingAvailability || isPickupPast}
                 className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gray-950 px-5 py-4 font-bold text-white shadow-md transition hover:bg-lime-500 hover:text-gray-950 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500"
               >
                 <Zap className="h-5 w-5 fill-current" />

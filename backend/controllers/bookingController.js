@@ -165,6 +165,13 @@ export const checkVehicleAvailability = async (req, res, next) => {
       });
     }
 
+    if (pickup.getTime() <= Date.now()) {
+      return res.status(400).json({
+        success: false,
+        message: "You can't book a ride for this time because it has already passed.",
+      });
+    }
+
     if (returnTime <= pickup) {
       return res.status(400).json({
         success: false,
@@ -249,6 +256,13 @@ export const createBooking = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: "Invalid pickup or return date/time format",
+      });
+    }
+
+    if (start.getTime() <= Date.now()) {
+      return res.status(400).json({
+        success: false,
+        message: "You can't book a ride for this time because it has already passed.",
       });
     }
 
@@ -470,6 +484,14 @@ export const updatePaymentStatus = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: "Only upcoming bookings can be paid.",
+      });
+    }
+
+    const pickupTime = new Date(booking.pickupDateTime);
+    if (pickupTime.getTime() <= Date.now()) {
+      return res.status(400).json({
+        success: false,
+        message: "You can't book a ride for this time because it has already passed.",
       });
     }
 

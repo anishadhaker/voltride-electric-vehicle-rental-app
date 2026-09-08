@@ -18,8 +18,16 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { getAllVehicles, getVehicleById } from "../data/vehicles";
 import { bookingAPI, vehicleAPI } from "../services/api";
+import {
+  PAST_DATE_TIME_ERROR,
+  getLocalDateString,
+  getLocalTimeString,
+  isPastDateTime,
+  createLocalISOString,
+  getInitialBookingTimes,
+} from "../utils/dateTimeUtils";
 
-const today = new Date().toISOString().split("T")[0];
+const today = getLocalDateString();
 
 function Booking() {
   const { id } = useParams();
@@ -50,16 +58,19 @@ function Booking() {
     };
   }, [id]);
 
-  const [form, setForm] = useState({
-    pickupDate: today,
-    pickupTime: "10:00",
-    returnDate: today,
-    returnTime: "14:00",
-    customerName: user?.name || "Anisha Dhaker",
-    customerMobile: user?.mobile || "+91 90798 72848",
-    customerEmail: user?.email || "anisha@example.com",
-    helmetCount: "1",
-    terms: false,
+  const [form, setForm] = useState(() => {
+    const initialTimes = getInitialBookingTimes();
+    return {
+      pickupDate: initialTimes.pickupDate,
+      pickupTime: initialTimes.pickupTime,
+      returnDate: initialTimes.returnDate,
+      returnTime: initialTimes.returnTime,
+      customerName: user?.name || "Anisha Dhaker",
+      customerMobile: user?.mobile || "+91 90798 72848",
+      customerEmail: user?.email || "anisha@example.com",
+      helmetCount: "1",
+      terms: false,
+    };
   });
 
   const [errorMessage, setErrorMessage] = useState("");
@@ -80,6 +91,9 @@ function Booking() {
       ? new Date(`${form.returnDate}T${form.returnTime}`)
       : null;
 
+  const isPickupPast = isPastDateTime(form.pickupDate, form.pickupTime);
+  const isTimeOrderInvalid = Boolean(start && end && end <= start);
+
   const handleCheckAvailability = async () => {
     const vehicleId = vehicle?._id || vehicle?.id;
     if (!vehicleId) {
@@ -96,6 +110,15 @@ function Booking() {
         loading: false,
         available: false,
         message: "Please select a valid pickup and return time.",
+      });
+      return;
+    }
+
+    if (isPickupPast) {
+      setAvailabilityStatus({
+        loading: false,
+        available: false,
+        message: PAST_DATE_TIME_ERROR,
       });
       return;
     }
@@ -118,8 +141,8 @@ function Booking() {
 
     try {
       const response = await vehicleAPI.checkAvailability(vehicleId, {
-        pickupDateTime: `${form.pickupDate}T${form.pickupTime}:00`,
-        returnDateTime: `${form.returnDate}T${form.returnTime}:00`,
+        pickupDateTime: createLocalISOString(form.pickupDate, form.pickupTime),
+        returnDateTime: createLocalISOString(form.returnDate, form.returnTime),
       });
 
       const available = Boolean(response?.available);
@@ -145,8 +168,6 @@ function Booking() {
     }
   };
 
-  const isTimeOrderInvalid = Boolean(start && end && end <= start);
-
   const rawHours =
     start && end && !isTimeOrderInvalid
       ? Math.ceil((end - start) / (1000 * 60 * 60))
@@ -168,17 +189,39 @@ function Booking() {
     form.customerMobile.trim() &&
     form.terms &&
     !isTimeOrderInvalid &&
+    !isPickupPast &&
     availabilityStatus.available === true &&
     !checkingAvailability &&
     !availabilityStatus.loading;
 
   const updateForm = (field, value) => {
     setErrorMessage("");
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => {
+      const next = { ...current, [field]: value };
+      if (isPastDateTime(next.pickupDate, next.pickupTime)) {
+        setErrorMessage(PAST_DATE_TIME_ERROR);
+        setAvailabilityStatus({
+          loading: false,
+          available: false,
+          message: PAST_DATE_TIME_ERROR,
+        });
+      } else if (availabilityStatus.message === PAST_DATE_TIME_ERROR) {
+        setAvailabilityStatus({
+          loading: false,
+          available: null,
+          message: "",
+        });
+      }
+      return next;
+    });
   };
 
   const handleSubmitBooking = async (e) => {
     e.preventDefault();
+    if (isPickupPast) {
+      setErrorMessage(PAST_DATE_TIME_ERROR);
+      return;
+    }
     if (isTimeOrderInvalid) {
       setErrorMessage("Return date and time must be after pickup date and time.");
       return;
@@ -205,8 +248,8 @@ function Booking() {
 
     let apiBookingRef = null;
     try {
-      const pickupISO = `${form.pickupDate}T${form.pickupTime}:00`;
-      const returnISO = `${form.returnDate}T${form.returnTime}:00`;
+      const pickupISO = createLocalISOString(form.pickupDate, form.pickupTime);
+      const returnISO = createLocalISOString(form.returnDate, form.returnTime);
 
       const res = await bookingAPI.create({
         vehicle: vehicle._id || vehicle.id,
@@ -338,6 +381,7 @@ function Booking() {
                   <input
                     type="time"
                     required
+                    min={form.pickupDate === today ? getLocalTimeString() : undefined}
                     value={form.pickupTime}
                     onChange={(e) => updateForm("pickupTime", e.target.value)}
                     className="w-full rounded-xl border border-gray-200 px-3.5 py-3 text-sm text-gray-900 outline-none focus:border-lime-500"
@@ -369,6 +413,7 @@ function Booking() {
                   <input
                     type="time"
                     required
+                    min={form.returnDate === form.pickupDate ? form.pickupTime : undefined}
                     value={form.returnTime}
                     onChange={(e) => updateForm("returnTime", e.target.value)}
                     className="w-full rounded-xl border border-gray-200 px-3.5 py-3 text-sm text-gray-900 outline-none focus:border-lime-500"
@@ -376,6 +421,13 @@ function Booking() {
                 </div>
               </div>
             </div>
+
+            {isPickupPast && (
+              <div className="mt-4 flex items-center gap-2 rounded-2xl bg-red-50 p-3.5 text-xs font-semibold text-red-700 border border-red-100">
+                <ShieldAlert className="h-4 w-4 shrink-0" />
+                {PAST_DATE_TIME_ERROR}
+              </div>
+            )}
 
             {isTimeOrderInvalid && (
               <div className="mt-4 flex items-center gap-2 rounded-2xl bg-red-50 p-3.5 text-xs font-semibold text-red-700 border border-red-100">
