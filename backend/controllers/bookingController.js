@@ -17,12 +17,17 @@ export const getBookings = async (req, res, next) => {
     const { status, bookingId } = req.query;
     const filter = {};
 
-    if (status) filter.bookingStatus = status;
+    if (status) {
+      filter.bookingStatus = status;
+    } else {
+      filter.bookingStatus = { $ne: "pending_payment" };
+    }
     if (bookingId) filter.bookingId = bookingId.toUpperCase();
 
     // If regular customer, restrict to their own bookings
     if (req.user && req.user.role !== "admin") {
       filter.user = req.user._id;
+      filter.paymentStatus = { $in: ["Paid", "Refunded"] };
     }
 
     const bookings = isMongoConnected()
@@ -48,10 +53,15 @@ export const getBookings = async (req, res, next) => {
 export const getMyBookings = async (req, res, next) => {
   try {
     const { status } = req.query;
-    const filter = { user: req.user._id };
+    const filter = {
+      user: req.user._id,
+    };
 
     if (status) {
       filter.bookingStatus = status;
+    } else {
+      filter.bookingStatus = { $ne: "pending_payment" };
+      filter.paymentStatus = { $in: ["Paid", "Refunded"] };
     }
 
     const bookings = isMongoConnected()
@@ -73,17 +83,23 @@ export const getMyBookings = async (req, res, next) => {
 export const getMyStats = async (req, res, next) => {
   try {
     const bookings = isMongoConnected()
-      ? await Booking.find({ user: req.user._id }).select("bookingStatus totalAmount duration")
-      : await memoryStore.bookings.find({ user: req.user._id });
+      ? await Booking.find({
+          user: req.user._id,
+          bookingStatus: { $ne: "pending_payment" },
+          paymentStatus: { $in: ["Paid", "Refunded"] },
+        }).select("bookingStatus paymentStatus totalAmount rentalPrice serviceFee taxes duration")
+      : (await memoryStore.bookings.find({ user: req.user._id })).filter(
+          (b) => b.bookingStatus !== "pending_payment" && ["Paid", "Refunded"].includes(b.paymentStatus)
+        );
 
     const stats = {
       totalRides: bookings.length,
-      upcomingRides: bookings.filter((booking) => booking.bookingStatus === "Upcoming").length,
+      upcomingRides: bookings.filter((booking) => booking.bookingStatus === "Upcoming" && booking.paymentStatus === "Paid").length,
       activeRides: bookings.filter((booking) => booking.bookingStatus === "Active").length,
       completedRides: bookings.filter((booking) => booking.bookingStatus === "Completed").length,
       cancelledRides: bookings.filter((booking) => booking.bookingStatus === "Cancelled").length,
       totalAmountSpent: bookings
-        .filter((booking) => booking.bookingStatus !== "Cancelled")
+        .filter((booking) => booking.bookingStatus !== "Cancelled" && booking.paymentStatus === "Paid")
         .reduce((total, booking) => total + bookingTotal(booking), 0),
     };
 
@@ -193,11 +209,11 @@ export const checkVehicleAvailability = async (req, res, next) => {
     const overlappingBookings = isMongoConnected()
       ? await Booking.find({
           vehicle: vehicleDoc._id,
-          bookingStatus: { $in: ["Upcoming", "Active"] },
+          bookingStatus: { $in: ["pending_payment", "Upcoming", "Active"] },
         })
       : await memoryStore.bookings.find({
           vehicle: vehicleDoc._id,
-          bookingStatus: { $in: ["Upcoming", "Active"] },
+          bookingStatus: { $in: ["pending_payment", "Upcoming", "Active"] },
         });
 
     const availability = isVehicleBookingAllowed(
@@ -276,11 +292,11 @@ export const createBooking = async (req, res, next) => {
     const existingBookings = isMongoConnected()
       ? await Booking.find({
           vehicle: vehicleDoc._id,
-          bookingStatus: { $in: ["Upcoming", "Active"] },
+          bookingStatus: { $in: ["pending_payment", "Upcoming", "Active"] },
         })
       : await memoryStore.bookings.find({
           vehicle: vehicleDoc._id,
-          bookingStatus: { $in: ["Upcoming", "Active"] },
+          bookingStatus: { $in: ["pending_payment", "Upcoming", "Active"] },
         });
 
     const availability = isVehicleBookingAllowed(vehicleDoc, existingBookings, start, end);
@@ -326,7 +342,7 @@ export const createBooking = async (req, res, next) => {
         serviceFee: calculatedServiceFee,
         taxes: calculatedTaxes,
         totalAmount: calculatedTotal,
-        bookingStatus: "Upcoming",
+        bookingStatus: "pending_payment",
         paymentStatus: "Pending",
       });
 
@@ -353,7 +369,7 @@ export const createBooking = async (req, res, next) => {
       serviceFee: calculatedServiceFee,
       taxes: calculatedTaxes,
       totalAmount: calculatedTotal,
-      bookingStatus: "Upcoming",
+      bookingStatus: "pending_payment",
       paymentStatus: "Pending",
     });
 
@@ -402,7 +418,7 @@ export const cancelBooking = async (req, res, next) => {
       });
     }
 
-    if (booking.bookingStatus !== "Upcoming") {
+    if (!["Upcoming", "pending_payment"].includes(booking.bookingStatus)) {
       return res.status(400).json({
         success: false,
         message: `Bookings with status ${booking.bookingStatus} cannot be cancelled.`,
@@ -480,10 +496,10 @@ export const updatePaymentStatus = async (req, res, next) => {
       });
     }
 
-    if (booking.bookingStatus !== "Upcoming") {
+    if (!["pending_payment", "Upcoming"].includes(booking.bookingStatus)) {
       return res.status(400).json({
         success: false,
-        message: "Only upcoming bookings can be paid.",
+        message: "Only pending or upcoming bookings can be paid.",
       });
     }
 
@@ -495,11 +511,47 @@ export const updatePaymentStatus = async (req, res, next) => {
       });
     }
 
+    const vehicleId = booking.vehicle?._id || booking.vehicle;
+    const vehicleDoc = isMongoConnected()
+      ? await Vehicle.findById(vehicleId)
+      : await memoryStore.vehicles.findById(vehicleId);
+
+    if (vehicleDoc) {
+      const overlappingBookings = isMongoConnected()
+        ? await Booking.find({
+            _id: { $ne: booking._id },
+            vehicle: vehicleDoc._id,
+            bookingStatus: { $in: ["Upcoming", "Active"] },
+          })
+        : (await memoryStore.bookings.find({
+            vehicle: vehicleDoc._id,
+            bookingStatus: { $in: ["Upcoming", "Active"] },
+          })).filter((b) => b._id.toString() !== booking._id.toString());
+
+      const availability = isVehicleBookingAllowed(
+        vehicleDoc,
+        overlappingBookings,
+        pickupTime,
+        new Date(booking.returnDateTime)
+      );
+
+      if (!availability.allowed) {
+        return res.status(409).json({
+          success: false,
+          message: availability.message,
+        });
+      }
+    }
+
     if (isMongoConnected()) {
       booking.paymentStatus = "Paid";
+      booking.bookingStatus = "Upcoming";
       await booking.save();
     } else {
-      booking = await memoryStore.bookings.update(booking._id, { paymentStatus: "Paid" });
+      booking = await memoryStore.bookings.update(booking._id, {
+        paymentStatus: "Paid",
+        bookingStatus: "Upcoming",
+      });
     }
 
     return res.status(200).json({

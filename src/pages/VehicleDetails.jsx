@@ -227,7 +227,14 @@ function VehicleDetails() {
       return;
     }
 
-    navigate(`/booking/${vehicle._id || vehicle.id}`);
+    navigate(`/booking/${vehicle._id || vehicle.id}`, {
+      state: {
+        pickupDate: booking.pickupDate,
+        pickupTime: booking.pickupTime,
+        returnDate: booking.returnDate,
+        returnTime: booking.returnTime,
+      },
+    });
   };
 
   return (

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:5002/api";
+const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:5001/api";
 const stamp = Date.now();
 const user = {
   name: "Password Reset Test",

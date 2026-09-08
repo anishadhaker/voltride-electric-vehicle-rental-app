@@ -62,18 +62,29 @@ const safeUser = (user) => ({
 export const getAdminDashboard = async (req, res, next) => {
   try {
     const [vehicles, bookings, users] = isMongoConnected()
-      ? await Promise.all([Vehicle.find(), Booking.find(), User.find().select("-password")])
+      ? await Promise.all([
+          Vehicle.find(),
+          Booking.find().populate("vehicle").populate("user", "name email mobile role").sort({ createdAt: -1 }),
+          User.find().select("-password"),
+        ])
       : await Promise.all([
           memoryStore.vehicles.find(),
           memoryStore.bookings.find(),
           memoryStore.users.find(),
         ]);
 
+    const confirmedBookings = bookings.filter(
+      (booking) => booking.bookingStatus !== "pending_payment" && booking.paymentStatus === "Paid"
+    );
+    const pendingBookings = bookings.filter(
+      (booking) => booking.bookingStatus === "pending_payment" || booking.paymentStatus === "Pending"
+    );
+
     const activeVehicles = vehicles.filter((vehicle) =>
       ["Available", "Booked", "In Use"].includes(vehicle.status)
     ).length;
     const today = new Date();
-    const todaysRides = bookings.filter((booking) => {
+    const todaysRides = confirmedBookings.filter((booking) => {
       const createdAt = new Date(booking.createdAt || booking.pickupDateTime);
       return createdAt.toDateString() === today.toDateString();
     }).length;
@@ -84,11 +95,12 @@ export const getAdminDashboard = async (req, res, next) => {
         counts: {
           vehicles: vehicles.length,
           activeVehicles,
-          bookings: bookings.length,
+          bookings: confirmedBookings.length,
+          pendingPayments: pendingBookings.length,
           todaysRides,
           users: users.length,
         },
-        recentBookings: bookings.slice(0, 8),
+        recentBookings: confirmedBookings.slice(0, 8),
       },
     });
   } catch (error) {
@@ -168,9 +180,21 @@ export const deleteAdminVehicle = async (req, res, next) => {
 
 export const getAdminBookings = async (req, res, next) => {
   try {
+    const { status, type } = req.query;
+    const filter = {};
+
+    if (type === "pending") {
+      filter.bookingStatus = "pending_payment";
+    } else if (type === "confirmed") {
+      filter.bookingStatus = { $ne: "pending_payment" };
+      filter.paymentStatus = "Paid";
+    } else if (status) {
+      filter.bookingStatus = status;
+    }
+
     const bookings = isMongoConnected()
-      ? await Booking.find().populate("vehicle").populate("user", "name email mobile role").sort({ createdAt: -1 })
-      : await memoryStore.bookings.find();
+      ? await Booking.find(filter).populate("vehicle").populate("user", "name email mobile role").sort({ createdAt: -1 })
+      : await memoryStore.bookings.find(filter);
     res.json({ success: true, count: bookings.length, data: bookings });
   } catch (error) {
     next(error);
@@ -206,7 +230,11 @@ export const getAdminAnalytics = async (req, res, next) => {
           memoryStore.users.find(),
         ]);
 
-    const totalRevenue = bookings.reduce(
+    const confirmedBookings = bookings.filter(
+      (b) => b.bookingStatus !== "pending_payment" && b.paymentStatus === "Paid"
+    );
+
+    const totalRevenue = confirmedBookings.reduce(
       (sum, booking) => sum + bookingTotal(booking),
       0
     );
@@ -223,7 +251,7 @@ export const getAdminAnalytics = async (req, res, next) => {
       return acc;
     }, {});
 
-    const vehicleBookingCounts = bookings.reduce((acc, booking) => {
+    const vehicleBookingCounts = confirmedBookings.reduce((acc, booking) => {
       const vehicleName =
         booking.vehicle && typeof booking.vehicle === "object"
           ? booking.vehicle.name || "Unknown"
@@ -237,7 +265,7 @@ export const getAdminAnalytics = async (req, res, next) => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    const recentActivity = bookings.slice(0, 6).map((booking) => {
+    const recentActivity = confirmedBookings.slice(0, 6).map((booking) => {
       const user = booking.user && typeof booking.user === "object" ? booking.user : null;
       const vehicle = booking.vehicle && typeof booking.vehicle === "object" ? booking.vehicle : null;
 
@@ -256,7 +284,7 @@ export const getAdminAnalytics = async (req, res, next) => {
       success: true,
       data: {
         totalRevenue,
-        totalBookings: bookings.length,
+        totalBookings: confirmedBookings.length,
         totalUsers: users.length,
         totalVehicles: vehicles.length,
         bookingStatusCounts,

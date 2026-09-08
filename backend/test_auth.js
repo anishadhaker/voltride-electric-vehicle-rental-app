@@ -1,6 +1,6 @@
 // Test script for VoltRide Backend Authentication & Protected APIs
 
-const BASE_URL = "http://localhost:5000/api";
+const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:5001/api";
 
 async function runTests() {
   console.log("==================================================");

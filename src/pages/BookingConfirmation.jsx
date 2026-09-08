@@ -24,8 +24,8 @@ function BookingConfirmation() {
       bookingAPI
         .getById(bookingId)
         .then((res) => {
-          if (isMounted && res?.data?.data) {
-            const b = res.data.data;
+          const b = res?.data?.data || res?.data;
+          if (isMounted && b && (b.bookingId || b._id)) {
             setApiBooking({
               id: b.bookingId || b._id,
               vehicleName: b.vehicle?.name || "Electric Vehicle",

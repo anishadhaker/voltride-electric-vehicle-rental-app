@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   BatteryCharging,
@@ -32,7 +32,9 @@ const today = getLocalDateString();
 function Booking() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
+  const passedState = location.state || {};
 
   const [vehicle, setVehicle] = useState(() => {
     const all = getAllVehicles();
@@ -61,10 +63,10 @@ function Booking() {
   const [form, setForm] = useState(() => {
     const initialTimes = getInitialBookingTimes();
     return {
-      pickupDate: initialTimes.pickupDate,
-      pickupTime: initialTimes.pickupTime,
-      returnDate: initialTimes.returnDate,
-      returnTime: initialTimes.returnTime,
+      pickupDate: passedState.pickupDate || initialTimes.pickupDate,
+      pickupTime: passedState.pickupTime || initialTimes.pickupTime,
+      returnDate: passedState.returnDate || initialTimes.returnDate,
+      returnTime: passedState.returnTime || initialTimes.returnTime,
       customerName: user?.name || "Anisha Dhaker",
       customerMobile: user?.mobile || "+91 90798 72848",
       customerEmail: user?.email || "anisha@example.com",
@@ -263,8 +265,11 @@ function Booking() {
         totalAmount,
       });
 
-      if (res?.data) {
-        apiBookingRef = res.data.bookingId || res.data._id || res.data?.data?.bookingId;
+      const bookingData = res?.data?.bookingId ? res.data : (res?.data?.data || res?.data || res);
+      apiBookingRef = bookingData?.bookingId || bookingData?._id || res?.bookingId || res?._id;
+
+      if (!apiBookingRef) {
+        throw new Error("Reservation created, but failed to retrieve booking reference. Please check your rides.");
       }
 
       setIsSubmitting(false);

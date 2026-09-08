@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:5005/api";
+const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:5001/api";
 const stamp = Date.now();
 const testUser = {
   name: "Past Booking Test",
@@ -119,22 +119,53 @@ assert.equal(res4.body.message, EXPECTED_ERROR, "Past minute error message misma
 console.log("✅ Case 4: Today with current time/already-passed minute -> rejected (400)");
 
 // 5. Today with a future time -> allowed
-const futureToday = new Date(Date.now() + 2 * 60 * 60 * 1000);
+let futureToday = new Date(Date.now() + 4 * 60 * 60 * 1000);
+for (let h = 2; h <= 20; h++) {
+  const candidatePickup = new Date(Date.now() + h * 60 * 60 * 1000);
+  const candidateReturn = new Date(candidatePickup.getTime() + 2 * 60 * 60 * 1000);
+  const chk = await request(`/vehicles/${vehicleId}/check-availability`, {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({
+      pickupDateTime: candidatePickup.toISOString(),
+      returnDateTime: candidateReturn.toISOString(),
+    }),
+  });
+  if (chk.status === 200 && chk.body.available) {
+    futureToday = candidatePickup;
+    break;
+  }
+}
 const res5 = await request("/bookings", {
   method: "POST",
   headers: authHeaders,
   body: JSON.stringify({
     vehicle: vehicleId,
     pickupDateTime: futureToday.toISOString(),
-    returnDateTime: new Date(futureToday.getTime() + 4 * 60 * 60 * 1000).toISOString(),
+    returnDateTime: new Date(futureToday.getTime() + 2 * 60 * 60 * 1000).toISOString(),
   }),
 });
-assert.equal(res5.status, 201, "Today with a future time should be created with 201");
+assert.equal(res5.status, 201, `Today with a future time should be created with 201: ${JSON.stringify(res5.body)}`);
 assert.equal(res5.body.success, true);
 console.log("✅ Case 5: Today with a future time -> allowed (201)");
 
 // 6. Tomorrow with any valid time -> allowed
-const tomorrow = new Date(Date.now() + 26 * 60 * 60 * 1000);
+let tomorrow = new Date(Date.now() + 26 * 60 * 60 * 1000);
+for (let d = 26; d <= 60; d += 4) {
+  const candidate = new Date(Date.now() + d * 60 * 60 * 1000);
+  const chk = await request(`/vehicles/${vehicleId}/check-availability`, {
+    method: "POST",
+    headers: authHeaders,
+    body: JSON.stringify({
+      pickupDateTime: candidate.toISOString(),
+      returnDateTime: new Date(candidate.getTime() + 4 * 60 * 60 * 1000).toISOString(),
+    }),
+  });
+  if (chk.status === 200 && chk.body.available) {
+    tomorrow = candidate;
+    break;
+  }
+}
 const res6 = await request("/bookings", {
   method: "POST",
   headers: authHeaders,
@@ -144,7 +175,7 @@ const res6 = await request("/bookings", {
     returnDateTime: new Date(tomorrow.getTime() + 4 * 60 * 60 * 1000).toISOString(),
   }),
 });
-assert.equal(res6.status, 201, "Tomorrow should be created with 201");
+assert.equal(res6.status, 201, `Tomorrow should be created with 201: ${JSON.stringify(res6.body)}`);
 assert.equal(res6.body.success, true);
 console.log("✅ Case 6: Tomorrow with any valid time -> allowed (201)");
 

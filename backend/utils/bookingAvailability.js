@@ -1,4 +1,4 @@
-export const BLOCKING_BOOKING_STATUSES = ["Upcoming", "Active"];
+export const BLOCKING_BOOKING_STATUSES = ["pending_payment", "Upcoming", "Active"];
 export const UNAVAILABLE_VEHICLE_STATUSES = ["Unavailable", "Maintenance", "Offline", "Charging"];
 
 export const overlapsWithExistingBooking = (

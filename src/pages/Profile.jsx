@@ -91,8 +91,19 @@ function Profile() {
     bookingAPI
       .getMyBookings()
       .then((res) => {
-        if (isMounted && res?.data?.data && Array.isArray(res.data.data)) {
-          const mapped = res.data.data.map((b) => ({
+        const rawList = Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res?.data?.data)
+          ? res.data.data
+          : Array.isArray(res)
+          ? res
+          : [];
+
+        if (isMounted) {
+          const confirmedOnly = rawList.filter(
+            (b) => b.bookingStatus !== "pending_payment" && (b.paymentStatus === "Paid" || b.bookingStatus === "Cancelled")
+          );
+          const mapped = confirmedOnly.map((b) => ({
             id: b.bookingId || b._id,
             vehicleName: b.vehicle?.name || "Electric Vehicle",
             vehicleType: b.vehicle?.type || "EV",
@@ -102,6 +113,7 @@ function Profile() {
             rentalHours: b.duration,
             totalAmount: (Number(b.rentalPrice) || 0) + (Number(b.serviceFee) || 0) + (Number(b.taxes) || 0),
             status: b.bookingStatus,
+            paymentStatus: b.paymentStatus,
           }));
           setApiRides(mapped);
         }
@@ -111,7 +123,8 @@ function Profile() {
     bookingAPI
       .getMyStats()
       .then((res) => {
-        if (isMounted && res?.data) setApiStats(res.data);
+        const stats = res?.data || res;
+        if (isMounted && stats) setApiStats(stats);
       })
       .catch(() => setLoadError("Unable to load your ride statistics right now."));
 

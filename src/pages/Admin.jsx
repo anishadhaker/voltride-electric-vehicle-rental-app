@@ -26,6 +26,7 @@ function Admin() {
   const [imagePreview, setImagePreview] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState("");
+  const [bookingTab, setBookingTab] = useState("confirmed");
 
   const loadSection = useCallback(async () => {
     setLoading(true);
@@ -249,30 +250,85 @@ function Admin() {
               {rows.length === 0 && <p className="p-10 text-center text-sm text-gray-500">No vehicles found.</p>}
             </div>
           ) : section === "bookings" ? (
-            <div className="mt-8 overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="border-b border-gray-100 bg-gray-50 text-xs uppercase text-gray-500">
-                  <tr>
-                    <th className="px-5 py-4">Booking</th>
-                    <th className="px-5 py-4">Customer</th>
-                    <th className="px-5 py-4">Vehicle</th>
-                    <th className="px-5 py-4">Status</th>
-                    <th className="px-5 py-4">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {rows.map((item) => (
-                    <tr key={item._id || item.bookingId}>
-                      <td className="px-5 py-4 font-bold text-gray-950">{item.bookingId || item._id}</td>
-                      <td className="px-5 py-4 text-gray-600">{item.user?.name || item.customerName || "Unknown"}</td>
-                      <td className="px-5 py-4 text-gray-600">{item.vehicle?.name || item.vehicleName || "Unknown"}</td>
-                      <td className="px-5 py-4 font-semibold text-lime-700">{item.bookingStatus || item.status || "-"}</td>
-                      <td className="px-5 py-4 text-gray-600">₹{item.totalAmount || 0}</td>
+            <div>
+              <div className="mt-8 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBookingTab("confirmed")}
+                  className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
+                    bookingTab === "confirmed"
+                      ? "bg-gray-950 text-white shadow-xs"
+                      : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"
+                  }`}
+                >
+                  Confirmed Bookings ({rows.filter((b) => b.bookingStatus !== "pending_payment" && b.paymentStatus === "Paid").length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBookingTab("pending")}
+                  className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
+                    bookingTab === "pending"
+                      ? "bg-amber-600 text-white shadow-xs"
+                      : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"
+                  }`}
+                >
+                  Pending Payments (Unpaid) ({rows.filter((b) => b.bookingStatus === "pending_payment" || b.paymentStatus === "Pending").length})
+                </button>
+              </div>
+
+              <div className="mt-4 overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+                <table className="w-full min-w-[760px] text-left text-sm">
+                  <thead className="border-b border-gray-100 bg-gray-50 text-xs uppercase text-gray-500">
+                    <tr>
+                      <th className="px-5 py-4">Booking Ref</th>
+                      <th className="px-5 py-4">Customer</th>
+                      <th className="px-5 py-4">Vehicle</th>
+                      <th className="px-5 py-4">Booking Status</th>
+                      <th className="px-5 py-4">Payment</th>
+                      <th className="px-5 py-4">Amount</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              {rows.length === 0 && <p className="p-10 text-center text-sm text-gray-500">No bookings found.</p>}
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {rows
+                      .filter((item) =>
+                        bookingTab === "confirmed"
+                          ? item.bookingStatus !== "pending_payment" && item.paymentStatus === "Paid"
+                          : item.bookingStatus === "pending_payment" || item.paymentStatus === "Pending"
+                      )
+                      .map((item) => (
+                        <tr key={item._id || item.bookingId}>
+                          <td className="px-5 py-4 font-bold font-mono text-gray-950">{item.bookingId || item._id}</td>
+                          <td className="px-5 py-4 text-gray-600">{item.user?.name || item.customerName || "Unknown"}</td>
+                          <td className="px-5 py-4 text-gray-600">{item.vehicle?.name || item.vehicleName || "Unknown"}</td>
+                          <td className="px-5 py-4 font-semibold text-gray-900">{item.bookingStatus || item.status || "-"}</td>
+                          <td className="px-5 py-4">
+                            {item.paymentStatus === "Paid" ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-lime-100 px-2.5 py-0.5 text-xs font-bold text-lime-900">
+                                Paid
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900">
+                                Pending Payment
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-4 font-bold text-gray-950">₹{item.totalAmount || 0}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+                {rows.filter((item) =>
+                  bookingTab === "confirmed"
+                    ? item.bookingStatus !== "pending_payment" && item.paymentStatus === "Paid"
+                    : item.bookingStatus === "pending_payment" || item.paymentStatus === "Pending"
+                ).length === 0 && (
+                  <p className="p-10 text-center text-sm text-gray-500">
+                    {bookingTab === "confirmed"
+                      ? "No confirmed bookings found."
+                      : "No pending payment bookings found."}
+                  </p>
+                )}
+              </div>
             </div>
           ) : section === "users" ? (
             <div className="mt-8 overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">

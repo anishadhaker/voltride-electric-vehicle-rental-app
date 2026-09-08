@@ -358,8 +358,15 @@ export const memoryStore = {
         });
       }
       if (query.bookingStatus) {
-        const bookedStatuses = query.bookingStatus?.$in || [query.bookingStatus];
-        results = results.filter((b) => bookedStatuses.includes(b.bookingStatus));
+        if (query.bookingStatus.$ne) {
+          results = results.filter((b) => b.bookingStatus !== query.bookingStatus.$ne);
+        } else {
+          const bookedStatuses = query.bookingStatus?.$in || [query.bookingStatus];
+          results = results.filter((b) => bookedStatuses.includes(b.bookingStatus));
+        }
+      }
+      if (query.paymentStatus) {
+        results = results.filter((b) => b.paymentStatus === query.paymentStatus);
       }
       return results;
     },
@@ -413,7 +420,7 @@ export const memoryStore = {
         serviceFee: bookingData.serviceFee,
         taxes: bookingData.taxes,
         totalAmount: bookingData.totalAmount,
-        bookingStatus: bookingData.bookingStatus || "Upcoming",
+        bookingStatus: bookingData.bookingStatus || "pending_payment",
         paymentStatus: bookingData.paymentStatus || "Pending",
         createdAt: new Date(),
       };

@@ -31,8 +31,19 @@ function Rides() {
     bookingAPI
       .getMyBookings()
       .then((res) => {
-        if (isMounted && res?.data?.data && Array.isArray(res.data.data)) {
-          const mapped = res.data.data.map((b) => ({
+        const rawList = Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res?.data?.data)
+          ? res.data.data
+          : Array.isArray(res)
+          ? res
+          : [];
+
+        if (isMounted) {
+          const confirmedOnly = rawList.filter(
+            (b) => b.bookingStatus !== "pending_payment" && (b.paymentStatus === "Paid" || b.bookingStatus === "Cancelled")
+          );
+          const mapped = confirmedOnly.map((b) => ({
             id: b.bookingId || b._id,
             vehicleName: b.vehicle?.name || "Electric Vehicle",
             vehicleType: b.vehicle?.type || "EV",
@@ -80,7 +91,7 @@ function Rides() {
   };
 
   const filteredBookings = displayedBookings.filter((b) => {
-    if (activeTab === "Upcoming") return b.status === "Upcoming";
+    if (activeTab === "Upcoming") return b.status === "Upcoming" && b.paymentStatus === "Paid";
     if (activeTab === "Active") return b.status === "Active";
     if (activeTab === "Completed") return b.status === "Completed";
     if (activeTab === "Cancelled") return b.status === "Cancelled";
