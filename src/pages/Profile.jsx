@@ -24,32 +24,13 @@ import {
   ShieldCheck,
   Smartphone,
   Trash2,
-  Wallet,
   X,
   Zap,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { authAPI, bookingAPI } from "../services/api";
 
-const DEFAULT_PROFILE = {
-  name: "Anisha Dhaker",
-  mobile: "+91 90798 72848",
-  email: "anisha@example.com",
-  dob: "2000-03-12",
-  gender: "Female",
-  address: "Flat 402, Green Avenue, Model Town, Phagwara, Punjab 144401",
-  memberSince: "January 2025",
-};
-
-const INITIAL_LOCATIONS = [
-  { id: "loc-1", title: "Home", address: "Flat 402, Green Avenue, Model Town, Phagwara", isDefault: true, icon: "home" },
-  { id: "loc-2", title: "College", address: "LPU Main Campus, Gate 2, Phagwara", isDefault: false, icon: "college" },
-];
-
-const INITIAL_PAYMENT_METHODS = [
-  { id: "pay-1", type: "UPI", provider: "Google Pay", vpa: "anisha@okaxis", isDefault: true },
-  { id: "pay-2", type: "UPI", provider: "PhonePe", vpa: "9079872848@ybl", isDefault: false },
-];
+const INITIAL_LOCATIONS = [];
 
 function Profile() {
   const navigate = useNavigate();
@@ -59,14 +40,18 @@ function Profile() {
   const [apiStats, setApiStats] = useState(null);
   const [loadError, setLoadError] = useState("");
 
-  const [profile, setProfile] = useState(() => {
-    return {
-      ...DEFAULT_PROFILE,
-      name: user?.name || DEFAULT_PROFILE.name,
-      email: user?.email || DEFAULT_PROFILE.email,
-      mobile: user?.mobile || DEFAULT_PROFILE.mobile,
-    };
-  });
+  const [profile, setProfile] = useState(() => ({
+    name: user?.name || "",
+    email: user?.email || "",
+    mobile: user?.mobile || "",
+    dob: user?.dob || "",
+    gender: user?.gender || "Prefer not to say",
+    address: user?.address || "",
+    profileImage: user?.profileImage || "",
+    memberSince: user?.createdAt
+      ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+      : "Recent Rider",
+  }));
 
   useEffect(() => {
     let isMounted = true;
@@ -75,13 +60,19 @@ function Profile() {
     authAPI
       .getProfile()
       .then((res) => {
-        if (isMounted && res?.data?.data) {
-          const u = res.data.data;
+        const u = res?.data?.data || res?.data || res;
+        if (isMounted && u && typeof u === "object") {
           setProfile((prev) => ({
             ...prev,
-            name: u.name || prev.name,
-            email: u.email || prev.email,
-            mobile: u.mobile || prev.mobile,
+            name: u.name ?? prev.name,
+            email: u.email ?? prev.email,
+            mobile: u.mobile ?? prev.mobile,
+            dob: u.dob !== undefined ? u.dob : prev.dob,
+            address: u.address !== undefined ? u.address : prev.address,
+            profileImage: u.profileImage !== undefined ? u.profileImage : prev.profileImage,
+            memberSince: u.createdAt
+              ? new Date(u.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+              : prev.memberSince,
           }));
         }
       })
@@ -157,12 +148,6 @@ function Profile() {
   const [newLocation, setNewLocation] = useState({ title: "", address: "" });
   const [locationError, setLocationError] = useState("");
 
-  // Payment methods
-  const [paymentMethods, setPaymentMethods] = useState(INITIAL_PAYMENT_METHODS);
-  const [addPaymentModalOpen, setAddPaymentModalOpen] = useState(false);
-  const [newUpi, setNewUpi] = useState({ provider: "Google Pay", vpa: "" });
-  const [upiError, setUpiError] = useState("");
-
   // Settings
   const [settings, setSettings] = useState({
     notifications: true,
@@ -194,7 +179,15 @@ function Profile() {
 
   // Sync draft when opening edit
   const openEditModal = () => {
-    setDraftProfile(profile);
+    setDraftProfile({
+      name: profile.name || "",
+      mobile: profile.mobile || "",
+      email: profile.email || "",
+      dob: profile.dob || "",
+      gender: profile.gender || "Prefer not to say",
+      address: profile.address || "",
+      profileImage: profile.profileImage || "",
+    });
     setEditErrors({});
     setEditModalOpen(true);
   };
@@ -202,10 +195,38 @@ function Profile() {
   const handleSaveProfile = async (e) => {
     e.preventDefault();
     const errors = {};
-    if (!draftProfile.name.trim()) errors.name = "Name cannot be empty.";
-    if (!draftProfile.mobile.trim()) errors.mobile = "Mobile number cannot be empty.";
-    if (!draftProfile.email.trim()) errors.email = "Email cannot be empty.";
-    if (!draftProfile.address.trim()) errors.address = "Address cannot be empty.";
+    const trimmedName = draftProfile.name?.trim() || "";
+    const trimmedMobile = draftProfile.mobile?.trim() || "";
+    const trimmedEmail = draftProfile.email?.trim() || "";
+    const cleanMobile = trimmedMobile.replace(/\D/g, "");
+
+    if (!trimmedName) {
+      errors.name = "Name cannot be empty.";
+    }
+
+    if (!trimmedMobile) {
+      errors.mobile = "Mobile number cannot be empty.";
+    } else if (cleanMobile.length < 10) {
+      errors.mobile = "Please provide a valid mobile number with at least 10 digits.";
+    }
+
+    if (!trimmedEmail) {
+      errors.email = "Email cannot be empty.";
+    } else {
+      const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        errors.email = "Please provide a valid email address.";
+      }
+    }
+
+    if (draftProfile.dob) {
+      const selectedDate = new Date(draftProfile.dob);
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      if (isNaN(selectedDate.getTime()) || selectedDate > today) {
+        errors.dob = "Date of birth cannot be in the future.";
+      }
+    }
 
     if (Object.keys(errors).length > 0) {
       setEditErrors(errors);
@@ -213,20 +234,39 @@ function Profile() {
     }
 
     try {
-      const res = await authAPI.updateProfile({
-        name: draftProfile.name,
-        mobile: draftProfile.mobile,
-      });
-      if (res?.data?.data) {
-        updateUser(res.data.data);
-      }
-    } catch (apiErr) {
-      console.warn("Backend updateProfile API unavailable:", apiErr.message);
-    }
+      const payload = {
+        name: trimmedName,
+        mobile: trimmedMobile,
+        email: trimmedEmail,
+        dob: draftProfile.dob ? draftProfile.dob.trim() : "",
+        address: draftProfile.address ? draftProfile.address.trim() : "",
+        profileImage: draftProfile.profileImage ? draftProfile.profileImage.trim() : "",
+      };
 
-    setProfile(draftProfile);
-    setEditModalOpen(false);
-    showToast("Profile details updated successfully!");
+      const res = await authAPI.updateProfile(payload);
+      const updatedData = res?.data?.data || res?.data || res;
+
+      if (updatedData && typeof updatedData === "object") {
+        updateUser(updatedData);
+        setProfile((prev) => ({
+          ...prev,
+          ...updatedData,
+          gender: draftProfile.gender,
+        }));
+      } else {
+        setProfile((prev) => ({
+          ...prev,
+          ...payload,
+          gender: draftProfile.gender,
+        }));
+      }
+
+      setEditModalOpen(false);
+      showToast("Profile details updated successfully!");
+    } catch (apiErr) {
+      const errMsg = apiErr.response?.data?.message || apiErr.message || "Failed to update profile";
+      setEditErrors({ api: errMsg });
+    }
   };
 
   const handleToggleSetting = (key) => {
@@ -257,32 +297,6 @@ function Profile() {
   const handleDeleteLocation = (id) => {
     setLocations((prev) => prev.filter((loc) => loc.id !== id));
     showToast("Location removed.");
-  };
-
-  // Add Payment Method
-  const handleAddPayment = (e) => {
-    e.preventDefault();
-    if (!newUpi.vpa.trim() || !newUpi.vpa.includes("@")) {
-      setUpiError("Please enter a valid UPI ID (e.g. name@bank or phone@upi).");
-      return;
-    }
-    const newEntry = {
-      id: `pay-${Date.now()}`,
-      type: "UPI",
-      provider: newUpi.provider,
-      vpa: newUpi.vpa.trim().toLowerCase(),
-      isDefault: paymentMethods.length === 0,
-    };
-    setPaymentMethods((prev) => [...prev, newEntry]);
-    setNewUpi({ provider: "Google Pay", vpa: "" });
-    setUpiError("");
-    setAddPaymentModalOpen(false);
-    showToast("UPI payment method added successfully.");
-  };
-
-  const handleDeletePayment = (id) => {
-    setPaymentMethods((prev) => prev.filter((pay) => pay.id !== id));
-    showToast("Payment method removed.");
   };
 
   // Change Password
@@ -376,9 +390,17 @@ function Profile() {
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
               {/* Profile Avatar */}
               <div className="relative flex-shrink-0">
-                <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-lime-400 text-3xl font-extrabold text-gray-950 shadow-md ring-4 ring-lime-100">
-                  {initials}
-                </div>
+                {profile.profileImage ? (
+                  <img
+                    src={profile.profileImage}
+                    alt={profile.name || "Profile avatar"}
+                    className="h-24 w-24 rounded-3xl object-cover shadow-md ring-4 ring-lime-100"
+                  />
+                ) : (
+                  <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-lime-400 text-3xl font-extrabold text-gray-950 shadow-md ring-4 ring-lime-100">
+                    {initials}
+                  </div>
+                )}
                 <span
                   className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-gray-950 text-white shadow"
                   title="KYC Verified Rider"
@@ -391,7 +413,7 @@ function Profile() {
               <div>
                 <div className="flex flex-wrap items-center gap-3">
                   <h2 className="text-2xl font-bold text-gray-950 sm:text-3xl">
-                    {profile.name}
+                    {profile.name || "VoltRide Rider"}
                   </h2>
                   <span className="rounded-full bg-lime-100 px-3 py-1 text-xs font-bold text-lime-800">
                     Active Rider
@@ -401,15 +423,17 @@ function Profile() {
                 <div className="mt-3 flex flex-wrap items-center gap-y-2 gap-x-6 text-sm text-gray-600">
                   <span className="flex items-center gap-2">
                     <Phone className="h-4 w-4 text-lime-600" />
-                    {profile.mobile}
+                    {profile.mobile || "Not provided"}
                   </span>
                   <span className="flex items-center gap-2">
                     <Mail className="h-4 w-4 text-lime-600" />
-                    {profile.email}
+                    {profile.email || "Not provided"}
                   </span>
                   <span className="flex items-center gap-2">
                     <MapPin className="h-4 w-4 text-lime-600" />
-                    {profile.address.split(",")[0]}
+                    {profile.address && profile.address.trim()
+                      ? profile.address.split(",")[0].trim() || profile.address
+                      : "Not provided"}
                   </span>
                 </div>
               </div>
@@ -473,32 +497,38 @@ function Profile() {
               <div className="mt-6 grid gap-6 sm:grid-cols-2">
                 <div className="rounded-2xl bg-gray-50/80 p-4 border border-gray-100/80">
                   <span className="text-xs font-medium text-gray-400">Full Name</span>
-                  <p className="mt-1 font-semibold text-gray-900">{profile.name}</p>
+                  <p className="mt-1 font-semibold text-gray-900">{profile.name || "Not provided"}</p>
                 </div>
 
                 <div className="rounded-2xl bg-gray-50/80 p-4 border border-gray-100/80">
                   <span className="text-xs font-medium text-gray-400">Mobile Number</span>
-                  <p className="mt-1 font-semibold text-gray-900">{profile.mobile}</p>
+                  <p className="mt-1 font-semibold text-gray-900">{profile.mobile || "Not provided"}</p>
                 </div>
 
                 <div className="rounded-2xl bg-gray-50/80 p-4 border border-gray-100/80">
                   <span className="text-xs font-medium text-gray-400">Email Address</span>
-                  <p className="mt-1 font-semibold text-gray-900 break-all">{profile.email}</p>
+                  <p className="mt-1 font-semibold text-gray-900 break-all">{profile.email || "Not provided"}</p>
                 </div>
 
                 <div className="rounded-2xl bg-gray-50/80 p-4 border border-gray-100/80">
                   <span className="text-xs font-medium text-gray-400">Date of Birth</span>
-                  <p className="mt-1 font-semibold text-gray-900">{profile.dob}</p>
+                  <p className="mt-1 font-semibold text-gray-900">
+                    {profile.dob && profile.dob.trim() ? profile.dob : "Not provided"}
+                  </p>
                 </div>
 
                 <div className="rounded-2xl bg-gray-50/80 p-4 border border-gray-100/80">
                   <span className="text-xs font-medium text-gray-400">Gender</span>
-                  <p className="mt-1 font-semibold text-gray-900">{profile.gender}</p>
+                  <p className="mt-1 font-semibold text-gray-900">
+                    {profile.gender && profile.gender.trim() ? profile.gender : "Not provided"}
+                  </p>
                 </div>
 
                 <div className="rounded-2xl bg-gray-50/80 p-4 border border-gray-100/80 sm:col-span-2">
                   <span className="text-xs font-medium text-gray-400">Current Address</span>
-                  <p className="mt-1 font-semibold text-gray-900">{profile.address}</p>
+                  <p className="mt-1 font-semibold text-gray-900 leading-relaxed">
+                    {profile.address && profile.address.trim() ? profile.address : "Not provided"}
+                  </p>
                 </div>
               </div>
             </section>
@@ -606,103 +636,52 @@ function Profile() {
               </div>
 
               <div className="mt-6 space-y-3">
-                {locations.map((loc) => (
-                  <div
-                    key={loc.id}
-                    className="flex items-start justify-between gap-3 rounded-2xl bg-gray-50/80 p-4 border border-gray-100"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-white shadow-xs text-lime-700">
-                        {loc.title.toLowerCase() === "home" ? (
-                          <HomeIcon className="h-4 w-4" />
-                        ) : loc.title.toLowerCase() === "college" ? (
-                          <GraduationCap className="h-4 w-4" />
-                        ) : (
-                          <Building className="h-4 w-4" />
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-bold text-gray-900">{loc.title}</p>
-                          {loc.isDefault && (
-                            <span className="rounded-md bg-lime-100 px-1.5 py-0.5 text-[10px] font-bold text-lime-800">
-                              Primary
-                            </span>
+                {locations.length > 0 ? (
+                  locations.map((loc) => (
+                    <div
+                      key={loc.id}
+                      className="flex items-start justify-between gap-3 rounded-2xl bg-gray-50/80 p-4 border border-gray-100"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-white shadow-xs text-lime-700">
+                          {loc.title.toLowerCase() === "home" ? (
+                            <HomeIcon className="h-4 w-4" />
+                          ) : loc.title.toLowerCase() === "college" ? (
+                            <GraduationCap className="h-4 w-4" />
+                          ) : (
+                            <Building className="h-4 w-4" />
                           )}
                         </div>
-                        <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">{loc.address}</p>
-                      </div>
-                    </div>
-
-                    {!loc.isDefault && (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteLocation(loc.id)}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition"
-                        title="Delete Location"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* PAYMENT METHODS */}
-            <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-gray-100 sm:p-8">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-5">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-950">Payment Methods</h2>
-                  <p className="mt-1 text-xs text-gray-500">Fast UPI checkouts for rides</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAddPaymentModalOpen(true)}
-                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3.5 py-2 text-xs font-semibold text-gray-700 transition hover:border-lime-500 hover:text-lime-700"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Add Payment Method
-                </button>
-              </div>
-
-              <div className="mt-6 space-y-3">
-                {paymentMethods.map((pay) => (
-                  <div
-                    key={pay.id}
-                    className="flex items-center justify-between rounded-2xl bg-gray-50/80 p-4 border border-gray-100"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-xs text-lime-700 font-bold text-xs">
-                        <Wallet className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-bold text-gray-900">{pay.provider}</p>
-                          <span className="rounded-md bg-gray-200/80 px-1.5 py-0.2 text-[10px] font-semibold text-gray-700">
-                            {pay.type}
-                          </span>
-                          {pay.isDefault && (
-                            <span className="rounded-md bg-lime-100 px-1.5 py-0.2 text-[10px] font-bold text-lime-800">
-                              Default
-                            </span>
-                          )}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold text-gray-900">{loc.title}</p>
+                            {loc.isDefault && (
+                              <span className="rounded-md bg-lime-100 px-1.5 py-0.5 text-[10px] font-bold text-lime-800">
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">{loc.address}</p>
                         </div>
-                        <p className="text-xs text-gray-500">{pay.vpa}</p>
                       </div>
-                    </div>
 
-                    {paymentMethods.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleDeletePayment(pay.id)}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition"
-                        title="Remove Payment Method"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
+                      {!loc.isDefault && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLocation(loc.id)}
+                          className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition"
+                          title="Delete Location"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 p-6 text-center text-xs text-gray-500">
+                    No saved locations yet. Add hubs or places you frequently ride from!
                   </div>
-                ))}
+                )}
               </div>
             </section>
 
@@ -832,6 +811,12 @@ function Profile() {
             </div>
 
             <form onSubmit={handleSaveProfile} className="mt-6 space-y-4" noValidate>
+              {editErrors.api && (
+                <div className="rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">
+                  {editErrors.api}
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-gray-700">Full Name</label>
                 <input
@@ -880,6 +865,9 @@ function Profile() {
                     onChange={(e) => setDraftProfile({ ...draftProfile, dob: e.target.value })}
                     className="mt-1.5 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:border-lime-500"
                   />
+                  {editErrors.dob && (
+                    <p className="mt-1 text-xs text-red-600">{editErrors.dob}</p>
+                  )}
                 </div>
 
                 <div>
@@ -898,9 +886,10 @@ function Profile() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700">Address</label>
+                <label className="block text-xs font-bold text-gray-700">Current Address</label>
                 <textarea
                   rows={2}
+                  placeholder="Enter your address (optional)"
                   value={draftProfile.address}
                   onChange={(e) => setDraftProfile({ ...draftProfile, address: e.target.value })}
                   className="mt-1.5 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:border-lime-500"
@@ -908,6 +897,17 @@ function Profile() {
                 {editErrors.address && (
                   <p className="mt-1 text-xs text-red-600">{editErrors.address}</p>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700">Profile Photo URL</label>
+                <input
+                  type="url"
+                  placeholder="https://example.com/avatar.jpg (optional)"
+                  value={draftProfile.profileImage}
+                  onChange={(e) => setDraftProfile({ ...draftProfile, profileImage: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:border-lime-500"
+                />
               </div>
 
               <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
@@ -989,75 +989,6 @@ function Profile() {
                   className="rounded-xl bg-lime-400 px-5 py-2 text-sm font-bold text-gray-950 hover:bg-lime-300"
                 >
                   Save Location
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ADD PAYMENT METHOD MODAL */}
-      {addPaymentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 px-6 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl ring-1 ring-gray-100">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-              <h2 className="text-xl font-bold text-gray-950">Add UPI Payment</h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setAddPaymentModalOpen(false);
-                  setUpiError("");
-                }}
-                className="rounded-full p-2 text-gray-400 hover:bg-gray-100"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddPayment} className="mt-5 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-700">App Provider</label>
-                <select
-                  value={newUpi.provider}
-                  onChange={(e) => setNewUpi({ ...newUpi, provider: e.target.value })}
-                  className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:border-lime-500"
-                >
-                  <option value="Google Pay">Google Pay (GPay)</option>
-                  <option value="PhonePe">PhonePe</option>
-                  <option value="Paytm UPI">Paytm UPI</option>
-                  <option value="BHIM UPI">BHIM UPI</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-700">UPI Virtual Address (VPA)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. mobile@upi or username@okhdfcbank"
-                  value={newUpi.vpa}
-                  onChange={(e) => setNewUpi({ ...newUpi, vpa: e.target.value })}
-                  className="mt-1.5 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:border-lime-500"
-                />
-              </div>
-
-              {upiError && <p className="text-xs text-red-600">{upiError}</p>}
-
-              <div className="mt-6 flex items-center justify-end gap-3 pt-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAddPaymentModalOpen(false);
-                    setUpiError("");
-                  }}
-                  className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-xl bg-gray-950 px-5 py-2 text-sm font-bold text-white hover:bg-lime-500 hover:text-gray-950"
-                >
-                  Link UPI
                 </button>
               </div>
             </form>

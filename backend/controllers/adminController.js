@@ -56,6 +56,9 @@ const safeUser = (user) => ({
   email: user.email,
   mobile: user.mobile,
   role: user.role,
+  profileImage: user.profileImage || "",
+  dob: user.dob || "",
+  address: user.address || "",
   createdAt: user.createdAt,
 });
 

@@ -18,6 +18,9 @@ class MemoryUser {
       ? data.password
       : bcrypt.hashSync(data.password, 10);
     this.role = data.role || "customer";
+    this.profileImage = data.profileImage || "";
+    this.dob = data.dob || "";
+    this.address = data.address || "";
     this.resetPasswordOtpHash = data.resetPasswordOtpHash || null;
     this.resetPasswordOtpExpires = data.resetPasswordOtpExpires || null;
     this.resetPasswordOtpRequestedAt = data.resetPasswordOtpRequestedAt || null;
@@ -269,8 +272,12 @@ export const memoryStore = {
     findByIdAndUpdate: async (id, updateData) => {
       const user = await memoryStore.users.findById(id);
       if (!user) return null;
-      if (updateData.name) user.name = updateData.name;
-      if (updateData.mobile) user.mobile = updateData.mobile;
+      if (updateData.name !== undefined) user.name = updateData.name;
+      if (updateData.mobile !== undefined) user.mobile = updateData.mobile;
+      if (updateData.email !== undefined) user.email = updateData.email.toLowerCase().trim();
+      if (updateData.profileImage !== undefined) user.profileImage = updateData.profileImage;
+      if (updateData.dob !== undefined) user.dob = updateData.dob;
+      if (updateData.address !== undefined) user.address = updateData.address;
       if (updateData.password) {
         user.password = updateData.password.startsWith("$2")
           ? updateData.password

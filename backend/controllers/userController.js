@@ -25,7 +25,9 @@ export const getUserProfile = async (req, res, next) => {
         email: user.email,
         mobile: user.mobile,
         role: user.role,
-        profileImage: user.profileImage,
+        profileImage: user.profileImage || "",
+        dob: user.dob || "",
+        address: user.address || "",
         createdAt: user.createdAt,
       },
     });
@@ -50,7 +52,7 @@ export const updateUserProfile = async (req, res, next) => {
       });
     }
 
-    const { name, email, mobile, profileImage } = req.body;
+    const { name, email, mobile, profileImage, dob, address } = req.body;
 
     // Check email uniqueness if email is changed
     if (email && email.toLowerCase().trim() !== user.email) {
@@ -84,6 +86,14 @@ export const updateUserProfile = async (req, res, next) => {
     // Check mobile uniqueness if mobile is changed
     if (mobile && mobile.trim() !== user.mobile) {
       const cleanMobile = mobile.replace(/[^0-9+]/g, "").trim();
+      const digitsOnly = cleanMobile.replace(/\D/g, "");
+      if (digitsOnly.length < 10) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide a valid mobile number with at least 10 digits",
+        });
+      }
+
       const existingMobile = isMongoConnected()
         ? await User.findOne({ mobile: cleanMobile, _id: { $ne: user._id } })
         : (await memoryStore.users.find()).find(
@@ -101,7 +111,9 @@ export const updateUserProfile = async (req, res, next) => {
     }
 
     if (name) user.name = name.trim();
-    if (profileImage !== undefined) user.profileImage = profileImage;
+    if (profileImage !== undefined) user.profileImage = typeof profileImage === "string" ? profileImage.trim() : "";
+    if (dob !== undefined) user.dob = typeof dob === "string" ? dob.trim() : "";
+    if (address !== undefined) user.address = typeof address === "string" ? address.trim() : "";
 
     const updatedUser = isMongoConnected()
       ? await user.save()
@@ -109,6 +121,9 @@ export const updateUserProfile = async (req, res, next) => {
           name: user.name,
           mobile: user.mobile,
           email: user.email,
+          profileImage: user.profileImage,
+          dob: user.dob,
+          address: user.address,
         });
 
     res.status(200).json({
@@ -120,7 +135,9 @@ export const updateUserProfile = async (req, res, next) => {
         email: updatedUser.email,
         mobile: updatedUser.mobile,
         role: updatedUser.role,
-        profileImage: updatedUser.profileImage,
+        profileImage: updatedUser.profileImage || "",
+        dob: updatedUser.dob || "",
+        address: updatedUser.address || "",
         createdAt: updatedUser.createdAt,
       },
     });

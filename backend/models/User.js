@@ -39,6 +39,16 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    dob: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    address: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     resetPasswordOtpHash: {
       type: String,
       default: null,

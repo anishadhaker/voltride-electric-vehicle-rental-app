@@ -72,7 +72,9 @@ export const getCurrentUser = async (req, res, next) => {
         email: user.email,
         mobile: user.mobile,
         role: user.role,
-        profileImage: user.profileImage,
+        profileImage: user.profileImage || "",
+        dob: user.dob || "",
+        address: user.address || "",
         createdAt: user.createdAt,
       },
     });
@@ -182,6 +184,9 @@ export const registerUser = async (req, res, next) => {
         email: user.email,
         mobile: user.mobile,
         role: user.role,
+        profileImage: user.profileImage || "",
+        dob: user.dob || "",
+        address: user.address || "",
       },
       token,
     });
@@ -257,6 +262,9 @@ export const loginUser = async (req, res, next) => {
         email: user.email,
         mobile: user.mobile,
         role: user.role,
+        profileImage: user.profileImage || "",
+        dob: user.dob || "",
+        address: user.address || "",
       },
       token,
     });
